@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "groups": ["CONTAINER", "REEFER"],
+  "unitTypes": [
+    { "code": "UT01", "label": { "en": "Dry container", "es": "Contenedor seco" }, "groups": ["CONTAINER"] },
+    { "code": "UT02", "label": { "en": "Reefer container", "es": "Contenedor refrigerado" }, "groups": ["CONTAINER", "REEFER"] }
+  ],
+  "steps": [
+    { "number": 1, "title": { "en": "Trip", "es": "Viaje" } },
+    { "number": 2, "title": { "en": "Unit", "es": "Unidad" } },
+    { "number": 3, "title": { "en": "Tractor and chassis", "es": "Tractor y chasis" } },
+    { "number": 4, "title": { "en": "Container structure", "es": "Estructura del contenedor" } },
+    { "number": 5, "title": { "en": "Reefer unit", "es": "Equipo de refrigeración" } },
+    { "number": 6, "title": { "en": "Interior condition", "es": "Estado del interior" } },
+    { "number": 7, "title": { "en": "Photos and sign-off", "es": "Fotos y firma" } }
+  ],
+  "summary": {
+    "tripRef": "TRIP_REF",
+    "inspectionDate": "TRIP_DATE",
+    "unitType": "UNIT_TYPE",
+    "truckPlate": "TRUCK_PLATE",
+    "containerNo": "CONTAINER_NO",
+    "driverName": "DRIVER_NAME",
+    "verdict": "VERDICT"
+  },
+  "questions": [
+    { "code": "TRIP_DATE", "step": 1, "kind": "date", "requirement": "required", "group": null, "default": "TODAY", "label": { "en": "Inspection date", "es": "Fecha de la inspección" } },
+    { "code": "TRIP_REF", "step": 1, "kind": "text", "requirement": "required", "group": null, "label": { "en": "Trip reference", "es": "Referencia del viaje" } },
+    { "code": "OPERATION", "step": 1, "kind": "choice", "requirement": "recommended", "group": null, "label": { "en": "Operation", "es": "Operación" }, "options": [
+      { "value": "LOADING", "label": { "en": "Loading", "es": "Carga" } },
+      { "value": "UNLOADING", "label": { "en": "Unloading", "es": "Descarga" } }
+    ] },
+    { "code": "ORIGIN", "step": 1, "kind": "text", "requirement": "optional", "group": null, "label": { "en": "Origin", "es": "Origen" } },
+    { "code": "DESTINATION", "step": 1, "kind": "text", "requirement": "optional", "group": null, "label": { "en": "Destination", "es": "Destino" } },
+    { "code": "CARRIER_NAME", "step": 1, "kind": "text", "requirement": "recommended", "group": null, "filledFrom": { "directory": "carriers", "field": "name" }, "label": { "en": "Carrier", "es": "Transportadora" } },
+    { "code": "DRIVER_NAME", "step": 1, "kind": "text", "requirement": "recommended", "group": null, "filledFrom": { "directory": "drivers", "field": "name" }, "label": { "en": "Driver's full name", "es": "Nombre completo del conductor" } },
+    { "code": "DRIVER_ID", "step": 1, "kind": "digits", "requirement": "recommended", "group": null, "filledFrom": { "directory": "drivers", "field": "idNumber" }, "label": { "en": "Driver's ID number", "es": "Número de documento del conductor" } },
+    { "code": "DRIVER_PHONE", "step": 1, "kind": "digits", "requirement": "optional", "group": null, "filledFrom": { "directory": "drivers", "field": "phone" }, "label": { "en": "Driver's phone", "es": "Teléfono del conductor" } },
+    { "code": "TRUCK_PLATE", "step": 1, "kind": "text", "requirement": "recommended", "group": null, "filledFrom": { "directory": "vehicles", "field": "plate" }, "label": { "en": "Truck plate", "es": "Placa del camión" } },
+    { "code": "CHASSIS_PLATE", "step": 1, "kind": "text", "requirement": "optional", "group": null, "label": { "en": "Chassis plate", "es": "Placa del chasis" } },
+    { "code": "HEAD_DOCUMENTS", "step": 1, "kind": "heading", "requirement": "optional", "group": null, "label": { "en": "Documents", "es": "Documentos" } },
+    { "code": "DOCS_LICENSE", "step": 1, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "The driver holds a valid driving licence", "es": "El conductor tiene licencia de conducción vigente" } },
+    { "code": "DOCS_INSURANCE", "step": 1, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "The vehicle insurance is current", "es": "El seguro del vehículo está vigente" } },
+    { "code": "DOCS_ORDER", "step": 1, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "The transport order matches the driver and the vehicle", "es": "La orden de transporte coincide con el conductor y el vehículo" } },
+
+    { "code": "UNIT_TYPE", "step": 2, "kind": "unit_type", "requirement": "required", "group": null, "label": { "en": "Unit type", "es": "Tipo de unidad" } },
+    { "code": "CONTAINER_NO", "step": 2, "kind": "text", "requirement": "recommended", "group": null, "label": { "en": "Container number", "es": "Número del contenedor" } },
+    { "code": "CONTAINER_SIZE", "step": 2, "kind": "choice", "requirement": "optional", "group": null, "label": { "en": "Container size", "es": "Tamaño del contenedor" }, "options": [
+      { "value": "20FT", "label": { "en": "20 ft", "es": "20 pies" } },
+      { "value": "40FT", "label": { "en": "40 ft", "es": "40 pies" } },
+      { "value": "40HC", "label": { "en": "40 ft high cube", "es": "40 pies high cube" } }
+    ] },
+    { "code": "SEALS_ARRIVAL", "step": 2, "kind": "text", "requirement": "recommended", "group": null, "label": { "en": "Seal numbers on arrival", "es": "Números de sello a la llegada" } },
+    { "code": "TARE_KG", "step": 2, "kind": "number", "requirement": "optional", "group": null, "label": { "en": "Tare weight (kg)", "es": "Tara (kg)" } },
+    { "code": "UNIT_NOTES", "step": 2, "kind": "text", "requirement": "optional", "group": null, "label": { "en": "Remarks about the unit", "es": "Observaciones sobre la unidad" } },
+
+    { "code": "TRC_FRONT", "step": 3, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "Bumper and engine bay are free of added compartments and foreign objects", "es": "El parachoques y el compartimento del motor no tienen compartimentos añadidos ni objetos extraños" } },
+    { "code": "TRC_CAB", "step": 3, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "The cab and its storage areas show no alterations", "es": "La cabina y sus espacios de almacenamiento no muestran alteraciones" } },
+    { "code": "TRC_TANKS", "step": 3, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "Fuel and air tanks keep their factory shape and fittings", "es": "Los tanques de combustible y de aire conservan su forma y sus conexiones de fábrica" } },
+    { "code": "TRC_TIRES", "step": 3, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "Tires are serviceable and nothing is hidden in or around them", "es": "Las llantas están en condiciones de uso y no ocultan nada" } },
+    { "code": "TRC_COUPLING", "step": 3, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "The fifth wheel and coupling area are unaltered", "es": "La quinta rueda y la zona de acople no tienen alteraciones" } },
+    { "code": "TRC_CHASSIS", "step": 3, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "Chassis beams and landing gear are visible and unaltered", "es": "Las vigas del chasis y las patas de apoyo están a la vista y sin alteraciones" } },
+    { "code": "TRC_SAFETY_KIT", "step": 3, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "Fire extinguisher is in date and a first-aid kit is on board", "es": "El extintor está vigente y hay un botiquín a bordo" } },
+
+    { "code": "HEAD_UNDERSIDE", "step": 4, "kind": "heading", "requirement": "optional", "group": "CONTAINER", "label": { "en": "1 · Underside", "es": "1 · Parte inferior" } },
+    { "code": "CNT_UNDER_BEAMS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Support beams are visible, evenly spaced and all of the same kind", "es": "Las vigas de soporte están a la vista, a la misma distancia y son todas iguales" } },
+    { "code": "CNT_UNDER_REPAIRS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "No fresh welds, patches or new paint underneath", "es": "No hay soldaduras, parches ni pintura recientes por debajo" } },
+    { "code": "HEAD_DOORS", "step": 4, "kind": "heading", "requirement": "optional", "group": "CONTAINER", "label": { "en": "2 · Doors", "es": "2 · Puertas" } },
+    { "code": "CNT_DOOR_HARDWARE", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Hinges, locking bars and handles are firm and keep their original fasteners", "es": "Las bisagras, barras de cierre y manijas están firmes y conservan sus fijaciones originales" } },
+    { "code": "CNT_DOOR_GASKETS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Door gaskets are intact and both doors close tight", "es": "Los empaques de las puertas están completos y ambas puertas cierran bien" } },
+    { "code": "HEAD_RIGHT", "step": 4, "kind": "heading", "requirement": "optional", "group": "CONTAINER", "label": { "en": "3 · Right side", "es": "3 · Costado derecho" } },
+    { "code": "CNT_RIGHT_PANELS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Right wall panels are even, with no unusual repairs or fresh paint", "es": "Los paneles del costado derecho son parejos, sin reparaciones extrañas ni pintura reciente" } },
+    { "code": "CNT_RIGHT_SOUND", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Tapping the right wall gives the same hollow sound along its length", "es": "Al golpear el costado derecho suena hueco y parejo en todo su largo" } },
+    { "code": "HEAD_LEFT", "step": 4, "kind": "heading", "requirement": "optional", "group": "CONTAINER", "label": { "en": "4 · Left side", "es": "4 · Costado izquierdo" } },
+    { "code": "CNT_LEFT_PANELS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Left wall panels are even, with no unusual repairs or fresh paint", "es": "Los paneles del costado izquierdo son parejos, sin reparaciones extrañas ni pintura reciente" } },
+    { "code": "CNT_LEFT_SOUND", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Tapping the left wall gives the same hollow sound along its length", "es": "Al golpear el costado izquierdo suena hueco y parejo en todo su largo" } },
+    { "code": "HEAD_FRONT", "step": 4, "kind": "heading", "requirement": "optional", "group": "CONTAINER", "label": { "en": "5 · Front wall", "es": "5 · Pared frontal" } },
+    { "code": "CNT_FRONT_BLOCKS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Corner blocks and vents are visible on the front wall", "es": "Los esquineros y las ventilas de la pared frontal están a la vista" } },
+    { "code": "CNT_FRONT_LENGTH", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "Inside length matches the outside length: there is no false wall", "es": "El largo interior coincide con el exterior: no hay una pared falsa" } },
+    { "code": "HEAD_ROOF", "step": 4, "kind": "heading", "requirement": "optional", "group": "CONTAINER", "label": { "en": "6 · Roof", "es": "6 · Techo" } },
+    { "code": "CNT_ROOF_HEIGHT", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "The roof sits at one height from end to end, with its beams visible", "es": "El techo tiene la misma altura de extremo a extremo y sus vigas están a la vista" } },
+    { "code": "CNT_ROOF_REPAIRS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "No fresh patches, sealant or paint on the roof", "es": "No hay parches, sellante ni pintura recientes en el techo" } },
+    { "code": "HEAD_FLOOR", "step": 4, "kind": "heading", "requirement": "optional", "group": "CONTAINER", "label": { "en": "7 · Floor", "es": "7 · Piso" } },
+    { "code": "CNT_FLOOR_LEVEL", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "The floor is flat and at a single level", "es": "El piso es plano y está a un solo nivel" } },
+    { "code": "CNT_FLOOR_REPAIRS", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "No new boards, odd fasteners or recent repairs on the floor", "es": "No hay tablas nuevas, fijaciones extrañas ni reparaciones recientes en el piso" } },
+    { "code": "CNT_NUMBER_MATCH", "step": 4, "kind": "check", "requirement": "recommended", "group": "CONTAINER", "label": { "en": "The container number is the same on every face", "es": "El número del contenedor es el mismo en todas sus caras" } },
+
+    { "code": "RFR_RUNS", "step": 5, "kind": "check", "requirement": "recommended", "group": "REEFER", "label": { "en": "The cooling unit starts and runs with no alarm", "es": "El equipo de refrigeración enciende y funciona sin alarmas" } },
+    { "code": "RFR_TEMPERATURE", "step": 5, "kind": "check", "requirement": "recommended", "group": "REEFER", "label": { "en": "The displayed temperature matches the requested set point", "es": "La temperatura en pantalla coincide con la temperatura solicitada" } },
+    { "code": "RFR_AIRFLOW", "step": 5, "kind": "check", "requirement": "recommended", "group": "REEFER", "label": { "en": "Drains and air ducts are clear", "es": "Los desagües y los ductos de aire están despejados" } },
+    { "code": "RFR_POWER", "step": 5, "kind": "check", "requirement": "recommended", "group": "REEFER", "label": { "en": "Power cable and plug are in good condition", "es": "El cable de alimentación y su enchufe están en buen estado" } },
+    { "code": "RFR_PHOTO_DISPLAY", "step": 5, "kind": "photo", "requirement": "optional", "group": "REEFER", "label": { "en": "Photo of the cooling unit display", "es": "Foto de la pantalla del equipo de refrigeración" } },
+
+    { "code": "INT_ODOR", "step": 6, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "The interior has no strong odours", "es": "El interior no tiene olores fuertes" } },
+    { "code": "INT_DRY", "step": 6, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "The interior is dry, with no grease or moisture stains", "es": "El interior está seco, sin manchas de grasa ni de humedad" } },
+    { "code": "INT_PESTS", "step": 6, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "There is no sign of pests, alive or dead", "es": "No hay señales de plagas, vivas o muertas" } },
+    { "code": "INT_DEBRIS", "step": 6, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "There is no dirt, debris or residue from earlier cargo", "es": "No hay suciedad, desechos ni residuos de cargas anteriores" } },
+    { "code": "INT_LIGHT", "step": 6, "kind": "check", "requirement": "recommended", "group": null, "label": { "en": "Light test passed: no daylight enters with the doors closed", "es": "Prueba de luz superada: no entra luz con las puertas cerradas" } },
+
+    { "code": "HEAD_PHOTOS", "step": 7, "kind": "heading", "requirement": "optional", "group": null, "label": { "en": "Photos", "es": "Fotos" } },
+    { "code": "PHOTO_ARRIVAL", "step": 7, "kind": "photo", "requirement": "recommended", "group": null, "label": { "en": "Unit on arrival, rear view with its number readable", "es": "Unidad a la llegada, vista trasera con el número legible" } },
+    { "code": "PHOTO_EMPTY", "step": 7, "kind": "photo", "requirement": "recommended", "group": null, "label": { "en": "Empty interior with the doors open", "es": "Interior vacío con las puertas abiertas" } },
+    { "code": "PHOTO_LOADED", "step": 7, "kind": "photo", "requirement": "optional", "group": null, "label": { "en": "Cargo in place, doors open", "es": "Carga acomodada, puertas abiertas" } },
+    { "code": "PHOTO_CLOSED", "step": 7, "kind": "photo", "requirement": "recommended", "group": null, "label": { "en": "Doors closed with the seal fitted", "es": "Puertas cerradas con el sello puesto" } },
+    { "code": "PHOTO_SEAL", "step": 7, "kind": "photo", "requirement": "optional", "group": null, "label": { "en": "Close-up of the seal number", "es": "Acercamiento al número del sello" } },
+    { "code": "HEAD_SIGN_OFF", "step": 7, "kind": "heading", "requirement": "optional", "group": null, "label": { "en": "Sign-off", "es": "Cierre" } },
+    { "code": "SEALS_DEPARTURE", "step": 7, "kind": "text", "requirement": "recommended", "group": null, "label": { "en": "Seal numbers on departure", "es": "Números de sello a la salida" } },
+    { "code": "VERDICT", "step": 7, "kind": "choice", "requirement": "required", "group": null, "label": { "en": "Is the unit fit for the operation?", "es": "¿La unidad es apta para la operación?" }, "options": [
+      { "value": "FIT", "label": { "en": "Fit", "es": "Apta" } },
+      { "value": "NOT_FIT", "label": { "en": "Not fit", "es": "No apta" } }
+    ] },
+    { "code": "VERDICT_NOTES", "step": 7, "kind": "text", "requirement": "optional", "group": null, "label": { "en": "Closing remarks", "es": "Observaciones finales" } },
+    { "code": "INSPECTOR_SIGNATURE", "step": 7, "kind": "signature", "requirement": "required", "group": null, "label": { "en": "Inspector's signature", "es": "Firma del inspector" } },
+    { "code": "DRIVER_SIGNATURE", "step": 7, "kind": "signature", "requirement": "recommended", "group": null, "label": { "en": "Driver's signature", "es": "Firma del conductor" } }
+  ]
+}
