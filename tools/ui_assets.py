@@ -11,7 +11,7 @@ src/ui/theme.ts), so images are written at 4x (@2x phones) and 6x (@3x phones).
 """
 import os
 
-from sprites32 import PAL, dawn_scene, frame, png, truck
+from sprites32 import PAL, dawn_scene, frame, icon, node, png, truck
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT_PNG = os.path.join(ROOT, 'assets', 'ui')
@@ -31,6 +31,15 @@ FRAMES = {
     'btn-orange-pressed': (frame(10, R2, 'k', 'o', hi='h', lo='Q'), R2, 0),
     'btn-paper': (frame(10, R2, 'k', 'p', hi='w', lo='m', depth=2, depth_c='n'), R2, 2),
     'btn-paper-pressed': (frame(10, R2, 'k', 'p', hi='w', lo='m'), R2, 0),
+    # the three check stamps: square, octagon, round (UI-BRIEF D3); "on" = chosen
+    'stamp-pass-off': (frame(12, [1], 'G', 'w', ring='l'), [1], 0),
+    'stamp-pass-on': (frame(12, [1], 'k', 'G', hi='g'), [1], 0),
+    'stamp-fail-off': (frame(16, [4, 3, 2, 1], 'R', 'w', ring='q'), [4, 3, 2, 1], 0),
+    'stamp-fail-on': (frame(16, [4, 3, 2, 1], 'k', 'R', hi='r'), [4, 3, 2, 1], 0),
+    'stamp-na-off': (frame(18, [5, 3, 2, 1, 1], 'B', 'w', ring='c'), [5, 3, 2, 1, 1], 0),
+    'stamp-na-on': (frame(18, [5, 3, 2, 1, 1], 'k', 'B', hi='v'), [5, 3, 2, 1, 1], 0),
+    # choice buttons and unit-type cards when chosen
+    'chosen': (frame(10, R2, 'k', 'h', hi='w', lo='o'), R2, 0),
 }
 
 
@@ -41,7 +50,20 @@ def yard_scene():
     return g
 
 
-SPRITES = {'yard-scene': yard_scene()}
+SPRITES = {
+    'yard-scene': yard_scene(),
+    'truck-dry': truck(),
+    'truck-reefer': truck(reefer=True),
+    'node-done': node('done'),
+    'node-current': node('current'),
+    'node-todo': node('todo'),
+    'node-skip': node('skip'),
+    'icon-check': icon('check'),
+    'icon-cross': icon('cross'),
+    'icon-dash': icon('dash'),
+    'icon-snow': icon('snow'),
+    'icon-alert': icon('alert'),
+}
 
 
 def colour(ch):

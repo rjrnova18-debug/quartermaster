@@ -84,8 +84,9 @@ by invitation only.
 quartermaster/
 ├── src/
 │   ├── app/            # screens (Expo Router: one file = one screen)
-│   ├── ui/             # pixel-art kit: palette, nine-slice frames, buttons, fields
-│   ├── data/           # Supabase client and encrypted session storage
+│   ├── ui/             # pixel-art kit: palette, nine-slice frames, buttons, fields, stamps
+│   ├── form/           # the inspection form: its hook, one view per question kind, stage map
+│   ├── data/           # local SQLite database, Supabase client, encrypted session storage
 │   ├── inspection/     # inspection rules: pure TypeScript, no React Native, no Supabase
 │   ├── demo/           # the invented demo data, used by the seed and the demo mode
 │   ├── session.tsx     # who is signed in, language, connection

@@ -107,15 +107,19 @@ interface FieldProps extends TextInputProps {
   label: string;
   /** In words, under the field; also turns the frame red. */
   error?: string | null;
+  /** Red frame without a message (the message is shown elsewhere). */
+  invalid?: boolean;
+  /** The label is only read by screen readers (it is already shown above the field). */
+  hideLabel?: boolean;
   /** Something next to the input, like a show/hide button. */
   accessory?: React.ReactNode;
 }
 
-export function TextField({ ref, label, error, accessory, ...input }: FieldProps) {
+export function TextField({ ref, label, error, invalid = false, hideLabel = false, accessory, ...input }: FieldProps) {
   return (
     <View style={styles.field}>
-      <Txt variant="label">{label}</Txt>
-      <Frame name={error ? 'fieldFail' : 'field'}>
+      {hideLabel ? null : <Txt variant="label">{label}</Txt>}
+      <Frame name={error || invalid ? 'fieldFail' : 'field'}>
         <View style={styles.fieldRow}>
           <TextInput
             ref={ref}

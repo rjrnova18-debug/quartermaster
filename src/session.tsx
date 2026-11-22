@@ -12,10 +12,11 @@
 import * as Network from 'expo-network';
 import { createContext, useContext, useEffect, useState } from 'react';
 
+import { getLocal } from './data/local';
 import { isServerConfigured, Profile, SignInProblem, signIn as remoteSignIn, signOut as remoteSignOut, watchSignOut } from './data/remote';
 import { secureStorage } from './data/secure-storage';
-import { DEMO_PEOPLE, DemoPersonKey } from './demo/demo-data';
-import { deviceLocale, MessageKey, t } from './i18n';
+import { buildDemoData, DEMO_PEOPLE, DemoPersonKey } from './demo/demo-data';
+import { deviceLocale, localDate, MessageKey, t } from './i18n';
 import { Locale } from './inspection/model';
 
 export type SessionState =
@@ -45,11 +46,21 @@ function demoProfile(key: DemoPersonKey): Profile {
   return { id: `demo-${person.key}`, fullName: person.fullName, role: person.role };
 }
 
+/** Fills the phone database with the demo as `person` sees it, dated around today. */
+async function loadDemo(person: DemoPersonKey) {
+  const now = new Date();
+  const store = await getLocal();
+  await store.loadDemo(buildDemoData(localDate(now), now.toISOString()), person, now.toISOString());
+}
+
 /** What the app remembers from last time: the demo, a signed-in profile, or nothing. */
 async function restore(): Promise<SessionState> {
-  const demo = await secureStorage.getItem(DEMO_KEY);
+  const demo = (await secureStorage.getItem(DEMO_KEY)) as DemoPersonKey | null;
   if (demo) {
-    return { status: 'signedIn', profile: demoProfile(demo as DemoPersonKey), demo: true };
+    if ((await (await getLocal()).getMode()) !== 'demo') {
+      await loadDemo(demo); // the demo was chosen before its data existed on the phone
+    }
+    return { status: 'signedIn', profile: demoProfile(demo), demo: true };
   }
   const saved = await secureStorage.getItem(PROFILE_KEY);
   if (saved && isServerConfigured()) {
@@ -90,19 +101,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if ('problem' in result) {
         return result.problem;
       }
+      await (await getLocal()).startLive();
       await secureStorage.setItem(PROFILE_KEY, JSON.stringify(result.profile));
       setState({ status: 'signedIn', profile: result.profile, demo: false });
       return null;
     },
 
     async startDemo(person) {
+      await loadDemo(person);
       await secureStorage.setItem(DEMO_KEY, person);
       setState({ status: 'signedIn', profile: demoProfile(person), demo: true });
     },
 
     async signOut() {
+      await (await getLocal()).clear(); // F3f: ask first when there are unsent changes
       if (state.status === 'signedIn' && state.demo) {
-        await secureStorage.removeItem(DEMO_KEY); // F3b: also erase the demo data
+        await secureStorage.removeItem(DEMO_KEY);
       } else {
         await secureStorage.removeItem(PROFILE_KEY);
         await remoteSignOut().catch(() => undefined); // offline: the local session is cleared anyway

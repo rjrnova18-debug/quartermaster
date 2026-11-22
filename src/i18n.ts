@@ -43,10 +43,64 @@ const en = {
   'role.supervisor': 'Supervisor',
 
   'home.greeting': 'Ready for the next quest, {name}?',
-  'home.comingSoon': 'The home screen, the form and the history arrive in the next stages of the build.',
+  'home.comingSoon': 'The full home screen, the history and the directory arrive in the next stages of the build.',
   'home.formVersion': 'Form version {version} · {questions} questions in {steps} steps',
   'home.signOut': 'Sign out',
   'home.leaveDemo': 'Leave demo',
+  'home.newInspection': 'New inspection',
+  'home.inspections': 'Inspections on this phone',
+  'home.empty': 'No inspections yet. Start the first quest!',
+  'home.noReference': 'No reference yet',
+
+  'status.draft': 'Draft',
+  'status.completed': 'Completed',
+
+  'form.back': 'Back',
+  'form.next': 'Next',
+  'form.complete': 'Complete',
+  'form.saveExit': 'Save and exit',
+  'form.progress': '{answered} of {total} answered',
+  'form.savedOnPhone': 'Saved on this phone',
+  'form.required': 'Required',
+  'form.addNote': 'Add a note',
+  'form.note': 'Note',
+  'form.noteForFail': 'What failed? (needed)',
+  'form.chooseDate': 'Choose date',
+  'form.today': 'Today',
+  'form.less': 'Less',
+  'form.more': 'More',
+  'form.attached': 'Attached',
+  'form.photosLater': 'Photos and signatures arrive in the next stage of the build.',
+  'form.containerHint': 'This container number fails its check digit. Read it again from the unit.',
+  'form.nextRefused': 'Solve the marked questions to continue.',
+  'form.notFound': 'This inspection is not on this phone.',
+  'form.completedBanner': 'Completed',
+  'form.correctUntil': 'You can correct it until {time}.',
+  'form.readOnly': 'Completed more than 24 hours ago: only a supervisor can change it.',
+  'form.correctionBlocked': 'Solve the marked questions to save this correction.',
+  'form.pendingTitle': 'Before completing',
+  'form.pendingBlocking': 'These must be solved first:',
+  'form.pendingWarnings': 'Still unanswered. You can complete anyway:',
+  'form.goBack': 'Go back',
+  'form.completeAnyway': 'Complete anyway',
+  'form.verdictReview': 'You chose Fit, but some checks failed. Complete it as Fit?',
+  'form.verdictConfirm': 'Yes, complete',
+  'form.verdictRevise': 'Review',
+  'form.cleared': 'Quest cleared!',
+  'form.clearedBody': 'Inspection {code} is completed.',
+  'form.backHome': 'Back to home',
+
+  'problem.required': 'Required: answer this question.',
+  'problem.recommended': 'Recommended: not answered yet.',
+  'problem.note_needed': 'A failed check needs a note.',
+  'problem.digits_only': 'Only the digits 0 to 9.',
+  'problem.not_a_number': 'Write a number, like 3750 or 12.5.',
+
+  'stage.label': 'Step {number}: {title}. {state}',
+  'stage.done': 'Answered',
+  'stage.current': 'Current step',
+  'stage.todo': 'To do',
+  'stage.skip': 'Does not apply',
 };
 
 export type MessageKey = keyof typeof en;
@@ -88,10 +142,64 @@ const es: Record<MessageKey, string> = {
   'role.supervisor': 'Supervisor',
 
   'home.greeting': '{name}, ¿vamos por la próxima misión?',
-  'home.comingSoon': 'La pantalla de inicio, el formulario y el historial llegan en las próximas etapas.',
+  'home.comingSoon': 'La pantalla de inicio completa, el historial y el directorio llegan en las próximas etapas.',
   'home.formVersion': 'Formulario versión {version} · {questions} preguntas en {steps} pasos',
   'home.signOut': 'Cerrar sesión',
   'home.leaveDemo': 'Salir de la demo',
+  'home.newInspection': 'Nueva inspección',
+  'home.inspections': 'Inspecciones en este teléfono',
+  'home.empty': 'Todavía no hay inspecciones. ¡Empieza la primera misión!',
+  'home.noReference': 'Sin referencia todavía',
+
+  'status.draft': 'Borrador',
+  'status.completed': 'Completada',
+
+  'form.back': 'Atrás',
+  'form.next': 'Siguiente',
+  'form.complete': 'Completar',
+  'form.saveExit': 'Guardar y salir',
+  'form.progress': '{answered} de {total} respondidas',
+  'form.savedOnPhone': 'Guardado en el teléfono',
+  'form.required': 'Obligatoria',
+  'form.addNote': 'Agregar una nota',
+  'form.note': 'Nota',
+  'form.noteForFail': '¿Qué falló? (obligatorio)',
+  'form.chooseDate': 'Elegir fecha',
+  'form.today': 'Hoy',
+  'form.less': 'Menos',
+  'form.more': 'Más',
+  'form.attached': 'Adjunta',
+  'form.photosLater': 'Las fotos y las firmas llegan en la próxima etapa.',
+  'form.containerHint': 'Este número de contenedor no pasa su dígito de control. Vuelve a leerlo en la unidad.',
+  'form.nextRefused': 'Resuelve las preguntas marcadas para seguir.',
+  'form.notFound': 'Esta inspección no está en este teléfono.',
+  'form.completedBanner': 'Completada',
+  'form.correctUntil': 'Puedes corregirla hasta {time}.',
+  'form.readOnly': 'Se completó hace más de 24 horas: solo un supervisor puede cambiarla.',
+  'form.correctionBlocked': 'Resuelve las preguntas marcadas para guardar esta corrección.',
+  'form.pendingTitle': 'Antes de completar',
+  'form.pendingBlocking': 'Primero hay que resolver:',
+  'form.pendingWarnings': 'Siguen sin responder. Puedes completar igual:',
+  'form.goBack': 'Volver',
+  'form.completeAnyway': 'Completar igual',
+  'form.verdictReview': 'Elegiste Apta, pero algunas verificaciones no cumplen. ¿Completar como Apta?',
+  'form.verdictConfirm': 'Sí, completar',
+  'form.verdictRevise': 'Revisar',
+  'form.cleared': '¡Misión cumplida!',
+  'form.clearedBody': 'La inspección {code} quedó completada.',
+  'form.backHome': 'Volver al inicio',
+
+  'problem.required': 'Obligatoria: responde esta pregunta.',
+  'problem.recommended': 'Recomendada: todavía sin responder.',
+  'problem.note_needed': 'Un "no cumple" necesita una nota.',
+  'problem.digits_only': 'Solo los dígitos del 0 al 9.',
+  'problem.not_a_number': 'Escribe un número, como 3750 o 12.5.',
+
+  'stage.label': 'Paso {number}: {title}. {state}',
+  'stage.done': 'Respondido',
+  'stage.current': 'Paso actual',
+  'stage.todo': 'Pendiente',
+  'stage.skip': 'No aplica',
 };
 
 const messages: Record<Locale, Record<MessageKey, string>> = { en, es };
@@ -110,4 +218,17 @@ export function localeFrom(deviceLocale: string): Locale {
 
 export function deviceLocale(): Locale {
   return localeFrom(Intl.DateTimeFormat().resolvedOptions().locale);
+}
+
+/** YYYY-MM-DD of the phone's calendar day (not UTC: "today" is the day the inspector sees). */
+export function localDate(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** A moment as people read it: "12 Mar, 14:05". */
+export function formatMoment(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(
+    new Date(iso),
+  );
 }

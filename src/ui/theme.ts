@@ -51,6 +51,8 @@ export const colors = {
   error: palette.failDark,
   warningText: palette.amberDark,
   demoMarker: palette.amber,
+  /** Darkens the screen behind a panel: ink at 55 %. */
+  scrim: `${palette.ink}8C`,
 } as const;
 
 export const fonts = {

@@ -1,0 +1,241 @@
+/**
+ * Everything the inspection form screen needs, as one hook: the answers, the current
+ * step, saving, and the rules for moving and completing. The screen only draws.
+ *
+ * Saving: 500 ms after the last change, and at once when the step changes, the form is
+ * left or the app goes to the background. A draft is always saved as it is. A completed
+ * inspection being corrected is saved only while it still meets the completion rules.
+ */
+import * as Haptics from 'expo-haptics';
+import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+
+import { getLocal, LocalInspection } from '@/data/local';
+import { catalog } from '@/inspection/catalog';
+import {
+  applicableSteps,
+  canComplete,
+  canEditInspection,
+  CORRECTION_WINDOW_HOURS,
+  nextStep,
+  pendingProblems,
+  previousStep,
+  Problem,
+  stepProblems,
+} from '@/inspection/form';
+import { AnswerSet, InspectionStatus } from '@/inspection/model';
+import { verdictNeedsReview } from '@/inspection/review';
+import { useSession } from '@/session';
+
+const AUTOSAVE_MS = 500;
+
+/** What the panel over the form is showing, if anything. */
+export type Panel = null | 'blocking' | 'warnings' | 'verdict' | 'cleared';
+
+export function useInspectionForm(id: string) {
+  const { state } = useSession();
+  const profile = state.status === 'signedIn' ? state.profile : null;
+
+  const [record, setRecord] = useState<LocalInspection | null | undefined>(undefined); // undefined while loading
+  const [answers, setAnswers] = useState<AnswerSet>({});
+  const [step, setStep] = useState(1);
+  const [status, setStatus] = useState<InspectionStatus>('draft');
+  const [revealedSteps, setRevealedSteps] = useState<number[]>([]); // steps whose problems are shown
+  const [panel, setPanel] = useState<Panel>(null);
+  const [refused, setRefused] = useState(false);
+
+  // ---------------------------------------------------------------- load
+
+  useEffect(() => {
+    let active = true;
+    getLocal()
+      .then((store) => store.getInspection(id))
+      .then((found) => {
+        if (!active) return;
+        setRecord(found);
+        if (found) {
+          setAnswers(found.answers);
+          setStatus(found.status);
+          const steps = applicableSteps(catalog, found.answers);
+          setStep(steps.includes(found.currentStep) ? found.currentStep : steps[0] ?? 1);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const editable =
+    record != null &&
+    profile != null &&
+    canEditInspection({ status, createdBy: record.createdBy, completedAt: record.completedAt }, profile, new Date().toISOString());
+  const correctionBlocked = editable && status === 'completed' && !canComplete(catalog, answers);
+
+  // ---------------------------------------------------------------- saving
+
+  // The latest values, for saves that run after the screen has moved on (leaving, background).
+  const latest = useRef({ answers, step, status, editable });
+  useEffect(() => {
+    latest.current = { answers, step, status, editable };
+  });
+
+  async function save(override?: Partial<{ step: number; status: InspectionStatus }>) {
+    const values = { ...latest.current, ...override };
+    if (!values.editable) return;
+    if (values.status === 'completed' && !canComplete(catalog, values.answers)) return; // F11 again for corrections
+    const store = await getLocal();
+    await store.saveInspection(id, { answers: values.answers, currentStep: values.step, status: values.status }, new Date().toISOString());
+  }
+
+  useEffect(() => {
+    if (record == null) return;
+    const timer = setTimeout(() => void save(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- save reads `latest`; only changes should restart the timer
+  }, [answers, record]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') void save();
+    });
+    return () => {
+      subscription.remove();
+      void save(); // leaving the form: nothing is lost
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once; save reads `latest`
+  }, []);
+
+  // ---------------------------------------------------------------- answering
+
+  function setAnswer(code: string, value: string | null) {
+    setRefused(false);
+    setAnswers((current) => {
+      const next = { ...current };
+      if (value === null) {
+        delete next[code];
+      } else {
+        next[code] = { ...current[code], value };
+      }
+      return next;
+    });
+  }
+
+  function setNote(code: string, note: string) {
+    setAnswers((current) => ({ ...current, [code]: { value: current[code]?.value ?? '', note } }));
+  }
+
+  // ---------------------------------------------------------------- moving (F3, F4, F10)
+
+  function moveTo(target: number) {
+    setStep(target);
+    setRefused(false);
+    void save({ step: target });
+  }
+
+  /** F10: refuses to move forward while the current step has a blocking problem. */
+  function blockedHere(): boolean {
+    if (stepProblems(catalog, answers, step).length === 0) return false;
+    setRevealedSteps((steps) => (steps.includes(step) ? steps : [...steps, step]));
+    setRefused(true);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    return true;
+  }
+
+  function goNext() {
+    const target = nextStep(catalog, answers, step);
+    if (target !== null && !blockedHere()) moveTo(target);
+  }
+
+  function goBack() {
+    const target = previousStep(catalog, answers, step);
+    if (target !== null) moveTo(target);
+  }
+
+  /** The stage map: backwards always, forwards under F10. */
+  function goTo(target: number) {
+    if (target === step || !applicableSteps(catalog, answers).includes(target)) return;
+    if (target < step || !blockedHere()) moveTo(target);
+  }
+
+  // ---------------------------------------------------------------- completing (F9, F11, R3)
+
+  function requestComplete() {
+    const pending = pendingProblems(catalog, answers);
+    if (pending.blocking.length > 0) {
+      setRevealedSteps(applicableSteps(catalog, answers));
+      setPanel('blocking');
+    } else if (pending.warnings.length > 0) {
+      setPanel('warnings');
+    } else {
+      confirmVerdictOrComplete();
+    }
+  }
+
+  function confirmVerdictOrComplete() {
+    if (verdictNeedsReview(catalog, answers)) {
+      setPanel('verdict');
+    } else {
+      void complete();
+    }
+  }
+
+  async function complete() {
+    await save({ status: 'completed' });
+    setStatus('completed');
+    const store = await getLocal();
+    setRecord(await store.getInspection(id));
+    setPanel('cleared');
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }
+
+  /** From the pending list: open the step of a problem and show its marks. */
+  function jumpTo(problem: Problem) {
+    setPanel(null);
+    setRevealedSteps((steps) => (steps.includes(problem.step) ? steps : [...steps, problem.step]));
+    if (problem.step !== step) moveTo(problem.step);
+  }
+
+  // ---------------------------------------------------------------- what the screen reads
+
+  const pending = pendingProblems(catalog, answers);
+
+  /** The problem shown on a question: format problems at once (F7, F8), the rest after a refusal. */
+  function problemOf(code: string): Problem | undefined {
+    const problem = pending.blocking.find((p) => p.code === code);
+    if (!problem) return undefined;
+    const asTyped = problem.reason === 'digits_only' || problem.reason === 'not_a_number';
+    return asTyped || revealedSteps.includes(problem.step) ? problem : undefined;
+  }
+
+  const correctableUntil =
+    status === 'completed' && record?.completedAt && profile?.role === 'inspector'
+      ? new Date(Date.parse(record.completedAt) + CORRECTION_WINDOW_HOURS * 3600 * 1000).toISOString()
+      : null;
+
+  return {
+    loading: record === undefined,
+    record,
+    answers,
+    step,
+    status,
+    editable,
+    correctionBlocked,
+    correctableUntil,
+    isLastStep: nextStep(catalog, answers, step) === null,
+    refused,
+    panel,
+    pending,
+    problemOf,
+    setAnswer,
+    setNote,
+    goNext,
+    goBack,
+    goTo,
+    requestComplete,
+    confirmVerdictOrComplete,
+    complete,
+    closePanel: () => setPanel(null),
+    jumpTo,
+    save,
+  };
+}
