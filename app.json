@@ -37,7 +37,14 @@
       ],
       "expo-secure-store",
       "expo-sqlite",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Quartermaster uses the camera to photograph the unit during an inspection.",
+          "photosPermission": "Quartermaster lets you attach a photo you already took to an inspection."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

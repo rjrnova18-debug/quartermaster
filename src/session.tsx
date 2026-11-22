@@ -12,6 +12,7 @@
 import * as Network from 'expo-network';
 import { createContext, useContext, useEffect, useState } from 'react';
 
+import { deleteAllFiles } from './data/files';
 import { getLocal } from './data/local';
 import { isServerConfigured, Profile, SignInProblem, signIn as remoteSignIn, signOut as remoteSignOut, watchSignOut } from './data/remote';
 import { secureStorage } from './data/secure-storage';
@@ -50,6 +51,7 @@ function demoProfile(key: DemoPersonKey): Profile {
 async function loadDemo(person: DemoPersonKey) {
   const now = new Date();
   const store = await getLocal();
+  deleteAllFiles();
   await store.loadDemo(buildDemoData(localDate(now), now.toISOString()), person, now.toISOString());
 }
 
@@ -101,6 +103,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if ('problem' in result) {
         return result.problem;
       }
+      deleteAllFiles();
       await (await getLocal()).startLive();
       await secureStorage.setItem(PROFILE_KEY, JSON.stringify(result.profile));
       setState({ status: 'signedIn', profile: result.profile, demo: false });
@@ -115,6 +118,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     async signOut() {
       await (await getLocal()).clear(); // F3f: ask first when there are unsent changes
+      deleteAllFiles();
       if (state.status === 'signedIn' && state.demo) {
         await secureStorage.removeItem(DEMO_KEY);
       } else {

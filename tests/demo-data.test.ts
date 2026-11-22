@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { buildDemoData, demoId, PHOTO_ASSETS } from '../src/demo/demo-data';
+import { DEMO_IMAGES } from '../src/demo/demo-images';
 import { catalog } from '../src/inspection/catalog';
 import {
   canComplete,
@@ -179,5 +180,10 @@ describe('attachments', () => {
     for (const asset of new Set(data.attachments.map((a) => a.asset))) {
       expect(existsSync(path.join(__dirname, '..', 'assets', 'demo', asset))).toBe(true);
     }
+  });
+
+  test('the app bundles every image the demo uses', () => {
+    const used = [...new Set(data.attachments.map((a) => a.asset))].sort();
+    expect(used.every((asset) => asset in DEMO_IMAGES)).toBe(true);
   });
 });

@@ -6,8 +6,10 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { imageSource } from '@/data/files';
 import { MessageKey } from '@/i18n';
 import { catalog } from '@/inspection/catalog';
 import { isValidContainerNumber } from '@/inspection/form';
@@ -15,8 +17,11 @@ import { Answer, CheckValue, Locale, Question } from '@/inspection/model';
 import { displayValue } from '@/inspection/review';
 import { FrameName, SPRITES } from '@/ui/assets.generated';
 import { Frame } from '@/ui/Frame';
-import { Notice, Sprite, TextButton, TextField, Txt } from '@/ui/controls';
+import { Notice, PixelButton, Sprite, TextButton, TextField, Txt } from '@/ui/controls';
 import { colors, fonts, palette, space, TOUCH_TARGET } from '@/ui/theme';
+
+import { SignaturePad } from './SignaturePad';
+import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from './signature';
 
 interface Props {
   question: Question;
@@ -28,7 +33,21 @@ interface Props {
   tr: (key: MessageKey, values?: Record<string, string | number>) => string;
   onAnswer: (value: string | null) => void;
   onNote: (note: string) => void;
+  media: Media;
 }
+
+/** What photo and signature questions need from the form (useInspectionForm). */
+export interface Media {
+  uriOf: (attachmentId: string) => string | null;
+  savedSignature: boolean;
+  pickPhoto: (code: string, from: 'camera' | 'library') => Promise<MessageKey | null>;
+  sign: (code: string, png: Uint8Array, keepAsMine: boolean) => Promise<void>;
+  applySavedSignature: (code: string) => Promise<void>;
+  remove: (code: string) => Promise<void>;
+}
+
+/** The inspector's own signature: the one that can reuse the saved signature. */
+const OWN_SIGNATURE = 'INSPECTOR_SIGNATURE';
 
 export function QuestionView(props: Props) {
   const { question, answer, problem, locale, tr } = props;
@@ -81,8 +100,9 @@ function Control(props: Props) {
     case 'number':
       return <NumberField {...props} />;
     case 'photo':
+      return <PhotoControl {...props} />;
     case 'signature':
-      return <AttachmentPlaceholder {...props} />;
+      return <SignatureControl {...props} />;
     default:
       return <PlainField {...props} />;
   }
@@ -265,16 +285,91 @@ function DateField({ answer, editable, onAnswer, tr }: Props) {
   );
 }
 
-function AttachmentPlaceholder({ answer, tr }: Props) {
-  return answer?.value ? (
-    <View style={styles.row}>
-      <Sprite name="iconCheck" />
-      <Txt>{tr('form.attached')}</Txt>
+// ---------------------------------------------------------------- photo and signature
+
+function PhotoControl({ question, answer, locale, editable, tr, media }: Props) {
+  const [viewing, setViewing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const uri = answer?.value ? media.uriOf(answer.value) : null;
+
+  async function pick(from: 'camera' | 'library') {
+    setMessage(null);
+    const problem = await media.pickPhoto(question.code, from);
+    if (problem) setMessage(tr(problem));
+  }
+
+  return (
+    <View style={styles.column}>
+      {uri ? (
+        <Pressable onPress={() => setViewing(true)} accessibilityRole="imagebutton" accessibilityLabel={tr('media.view')}>
+          <Frame name="card">
+            <Image source={imageSource(uri)} style={styles.thumb} resizeMode="cover" />
+          </Frame>
+        </Pressable>
+      ) : null}
+      <View style={styles.wrap}>
+        {uri ? <TextButton label={tr('media.view')} onPress={() => setViewing(true)} /> : null}
+        {editable ? <TextButton label={tr(uri ? 'media.replace' : 'media.takePhoto')} onPress={() => pick('camera')} /> : null}
+        {editable ? <TextButton label={tr('media.choosePhoto')} onPress={() => pick('library')} /> : null}
+        {editable && uri ? <TextButton label={tr('media.remove')} onPress={() => media.remove(question.code)} /> : null}
+      </View>
+      {message ? (
+        <Txt variant="small" color={colors.error} accessibilityLiveRegion="polite">
+          {message}
+        </Txt>
+      ) : null}
+      {viewing && uri ? (
+        <Modal animationType="fade" onRequestClose={() => setViewing(false)}>
+          <SafeAreaView style={styles.viewer}>
+            <Txt variant="heading">{question.label[locale]}</Txt>
+            <Image source={imageSource(uri)} style={styles.full} resizeMode="contain" />
+            <PixelButton variant="secondary" label={tr('media.close')} onPress={() => setViewing(false)} />
+          </SafeAreaView>
+        </Modal>
+      ) : null}
     </View>
-  ) : (
-    <Txt variant="small" color={colors.textMuted}>
-      {tr('form.photosLater')}
-    </Txt>
+  );
+}
+
+function SignatureControl({ question, answer, locale, editable, tr, media }: Props) {
+  const [signing, setSigning] = useState(false);
+  const uri = answer?.value ? media.uriOf(answer.value) : null;
+  const own = question.code === OWN_SIGNATURE;
+
+  return (
+    <View style={styles.column}>
+      {uri ? (
+        <Frame name="card">
+          <Image source={imageSource(uri)} style={styles.signature} resizeMode="contain" accessibilityLabel={question.label[locale]} />
+        </Frame>
+      ) : null}
+      {editable ? (
+        <View style={styles.wrap}>
+          <TextButton label={tr(uri ? 'media.signAgain' : 'media.sign')} onPress={() => setSigning(true)} />
+          {own && media.savedSignature ? (
+            <TextButton label={tr('media.useSaved')} onPress={() => media.applySavedSignature(question.code)} />
+          ) : null}
+          {uri ? <TextButton label={tr('media.remove')} onPress={() => media.remove(question.code)} /> : null}
+        </View>
+      ) : null}
+      {signing ? (
+        <SignaturePad
+          title={question.label[locale]}
+          tr={tr}
+          canUseSaved={own && media.savedSignature}
+          offerKeep={own}
+          onCancel={() => setSigning(false)}
+          onUseSaved={() => {
+            setSigning(false);
+            void media.applySavedSignature(question.code);
+          }}
+          onDone={(png, keep) => {
+            setSigning(false);
+            void media.sign(question.code, png, keep);
+          }}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -328,4 +423,9 @@ const styles = StyleSheet.create({
   dateValue: { minHeight: TOUCH_TARGET - 12, justifyContent: 'center' },
   small: { minWidth: TOUCH_TARGET, minHeight: TOUCH_TARGET },
   smallInner: { minHeight: TOUCH_TARGET - 16, alignItems: 'center', justifyContent: 'center' },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.m },
+  thumb: { width: '100%', height: 160 },
+  signature: { width: '100%', aspectRatio: SIGNATURE_WIDTH / SIGNATURE_HEIGHT },
+  viewer: { flex: 1, backgroundColor: colors.background, padding: space.m, gap: space.m },
+  full: { flex: 1, width: '100%' },
 });

@@ -121,6 +121,45 @@ describe('live mode', () => {
   });
 });
 
+describe('attachments', () => {
+  const photo = { id: 'photo-1', inspectionId: 'insp-1', kind: 'photo' as const, questionCode: 'PHOTO_ARRIVAL', localUri: 'file:///a.jpg' };
+
+  test('a new photo is kept and queued after its inspection', async () => {
+    const { store } = await freshStore();
+    await store.startLive();
+    await newDraft(store);
+    await store.addAttachment(photo, LATER);
+    expect(await store.listAttachments('insp-1')).toEqual([{ ...photo, uploaded: false }]);
+    expect((await store.outbox()).map((op) => [op.entity, op.entityId, op.parentId])).toEqual([
+      ['inspection', 'insp-1', null],
+      ['attachment', 'photo-1', 'insp-1'],
+    ]);
+  });
+
+  test('removing a photo the server never saw leaves nothing to send (S3) and returns its file', async () => {
+    const { store } = await freshStore();
+    await store.startLive();
+    await newDraft(store);
+    await store.addAttachment(photo, LATER);
+    expect(await store.removeAttachment('photo-1', LATER)).toBe('file:///a.jpg');
+    expect(await store.listAttachments('insp-1')).toEqual([]);
+    expect((await store.outbox()).map((op) => op.entity)).toEqual(['inspection']);
+  });
+
+  test('removing an uploaded photo queues its deletion', async () => {
+    const { db, store } = await freshStore();
+    await store.startLive();
+    await newDraft(store);
+    await store.addAttachment(photo, LATER);
+    await db.runAsync("UPDATE attachments SET uploaded = 1 WHERE id = 'photo-1'", []);
+    await db.runAsync("DELETE FROM outbox WHERE entity = 'attachment'", []); // as if it was sent
+    await store.removeAttachment('photo-1', LATER);
+    expect(await store.outbox()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ entity: 'attachment', entityId: 'photo-1', action: 'delete' })]),
+    );
+  });
+});
+
 describe('demo mode', () => {
   const data = buildDemoData(TODAY, NOW);
 

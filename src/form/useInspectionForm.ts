@@ -6,11 +6,15 @@
  * left or the app goes to the background. A draft is always saved as it is. A completed
  * inspection being corrected is saved only while it still meets the completion rules.
  */
+import { randomUUID } from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { getLocal, LocalInspection } from '@/data/local';
+import { deleteFile, hasSavedSignature, keepAsSavedSignature, readSavedSignature, storePhoto, storeSignature } from '@/data/files';
+import { getLocal, LocalAttachment, LocalInspection } from '@/data/local';
+import { MessageKey } from '@/i18n';
 import { catalog } from '@/inspection/catalog';
 import {
   applicableSteps,
@@ -43,13 +47,18 @@ export function useInspectionForm(id: string) {
   const [revealedSteps, setRevealedSteps] = useState<number[]>([]); // steps whose problems are shown
   const [panel, setPanel] = useState<Panel>(null);
   const [refused, setRefused] = useState(false);
+  const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
   // ---------------------------------------------------------------- load
 
   useEffect(() => {
     let active = true;
     getLocal()
-      .then((store) => store.getInspection(id))
+      .then(async (store) => {
+        const found = await store.getInspection(id);
+        if (found && active) setAttachments(await store.listAttachments(id));
+        return found;
+      })
       .then((found) => {
         if (!active) return;
         setRecord(found);
@@ -123,6 +132,69 @@ export function useInspectionForm(id: string) {
   function setNote(code: string, note: string) {
     setAnswers((current) => ({ ...current, [code]: { value: current[code]?.value ?? '', note } }));
   }
+
+  // ---------------------------------------------------------------- photos and signatures
+
+  /**
+   * Stores a new attachment for a question and points the answer at it. The previous
+   * one is removed afterwards (replacing creates a new attachment, DATA-MODEL.md).
+   */
+  async function attach(code: string, attachment: Pick<LocalAttachment, 'id' | 'kind' | 'localUri'>) {
+    const store = await getLocal();
+    const now = new Date().toISOString();
+    await store.addAttachment({ ...attachment, inspectionId: id, questionCode: code }, now);
+    const previous = latest.current.answers[code]?.value;
+    setAnswer(code, attachment.id);
+    if (previous) deleteFile(await store.removeAttachment(previous, now));
+    setAttachments(await store.listAttachments(id));
+  }
+
+  /** Camera or gallery. Returns a message key when something stopped it. */
+  async function pickPhoto(code: string, from: 'camera' | 'library'): Promise<MessageKey | null> {
+    if (from === 'camera' && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+      return 'media.cameraDenied';
+    }
+    const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1 };
+    const result = from === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
+    if (result.canceled) return null;
+    try {
+      const attachmentId = randomUUID();
+      const localUri = await storePhoto(result.assets[0], id, attachmentId);
+      await attach(code, { id: attachmentId, kind: 'photo', localUri });
+      return null;
+    } catch {
+      return 'media.failed';
+    }
+  }
+
+  async function sign(code: string, png: Uint8Array, keepAsMine: boolean) {
+    const attachmentId = randomUUID();
+    const localUri = storeSignature(png, id, attachmentId);
+    if (keepAsMine) keepAsSavedSignature(png);
+    await attach(code, { id: attachmentId, kind: 'signature', localUri });
+  }
+
+  async function applySavedSignature(code: string) {
+    await sign(code, await readSavedSignature(), false);
+  }
+
+  async function removeMedia(code: string) {
+    const previous = latest.current.answers[code]?.value;
+    if (!previous) return;
+    setAnswer(code, null);
+    const store = await getLocal();
+    deleteFile(await store.removeAttachment(previous, new Date().toISOString()));
+    setAttachments(await store.listAttachments(id));
+  }
+
+  const media = {
+    uriOf: (attachmentId: string) => attachments.find((a) => a.id === attachmentId)?.localUri ?? null,
+    savedSignature: hasSavedSignature(),
+    pickPhoto,
+    sign,
+    applySavedSignature,
+    remove: removeMedia,
+  };
 
   // ---------------------------------------------------------------- moving (F3, F4, F10)
 
@@ -226,6 +298,7 @@ export function useInspectionForm(id: string) {
     panel,
     pending,
     problemOf,
+    media,
     setAnswer,
     setNote,
     goNext,

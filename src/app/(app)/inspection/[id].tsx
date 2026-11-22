@@ -70,6 +70,7 @@ export default function InspectionScreen() {
               tr={tr}
               onAnswer={(value) => form.setAnswer(question.code, value)}
               onNote={(note) => form.setNote(question.code, note)}
+              media={form.media}
             />
           ))}
         </ScrollView>

@@ -33,6 +33,26 @@ export interface LocalInspection extends Inspection {
 
 export type LocalMode = 'live' | 'demo';
 
+/** A photo, signature or report kept on this phone. */
+export interface LocalAttachment {
+  id: string;
+  inspectionId: string;
+  kind: 'photo' | 'signature' | 'report';
+  questionCode: string | null;
+  /** A file of this phone, or "demo:<file>" for a bundled demo image. */
+  localUri: string | null;
+  uploaded: boolean;
+}
+
+interface AttachmentDbRow {
+  id: string;
+  inspection_id: string;
+  kind: LocalAttachment['kind'];
+  question_code: string | null;
+  local_uri: string | null;
+  uploaded: number;
+}
+
 // ---------------------------------------------------------------- schema
 
 /**
@@ -376,6 +396,54 @@ export function localStore(db: Db) {
         saved = true;
       });
       return saved;
+    },
+
+    async listAttachments(inspectionId: string): Promise<LocalAttachment[]> {
+      const rows = await db.getAllAsync<AttachmentDbRow>('SELECT * FROM attachments WHERE inspection_id = ?', [inspectionId]);
+      return rows.map((r) => ({
+        id: r.id,
+        inspectionId: r.inspection_id,
+        kind: r.kind,
+        questionCode: r.question_code,
+        localUri: r.local_uri,
+        uploaded: r.uploaded === 1,
+      }));
+    },
+
+    /** Registers a file already stored on the phone, and queues its upload (it waits for its inspection, S5). */
+    async addAttachment(a: Omit<LocalAttachment, 'uploaded'>, now: string) {
+      const live = (await getMode()) !== 'demo';
+      await db.withTransactionAsync(async () => {
+        await db.runAsync(
+          'INSERT INTO attachments (id, inspection_id, kind, question_code, local_uri, uploaded, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)',
+          [a.id, a.inspectionId, a.kind, a.questionCode, a.localUri, now],
+        );
+        if (live) {
+          await queue({ entity: 'attachment', entityId: a.id, parentId: a.inspectionId, action: 'upsert', existsOnServer: false }, now);
+        }
+      });
+    },
+
+    /**
+     * Forgets an attachment and queues its deletion; one never uploaded leaves nothing to
+     * send (S3). Returns the file to delete from the phone, if any.
+     */
+    async removeAttachment(id: string, now: string): Promise<string | null> {
+      const live = (await getMode()) !== 'demo';
+      let localUri: string | null = null;
+      await db.withTransactionAsync(async () => {
+        const row = await db.getFirstAsync<AttachmentDbRow>('SELECT * FROM attachments WHERE id = ?', [id]);
+        if (!row) return;
+        localUri = row.local_uri;
+        await db.runAsync('DELETE FROM attachments WHERE id = ?', [id]);
+        if (live) {
+          await queue(
+            { entity: 'attachment', entityId: id, parentId: row.inspection_id, action: 'delete', existsOnServer: row.uploaded === 1 },
+            now,
+          );
+        }
+      });
+      return localUri;
     },
 
     /** The notes waiting to be sent (the sender and the sync badge use them). */
