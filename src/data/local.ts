@@ -10,11 +10,14 @@
  * Node's own SQLite. The SQL is the same, so the tests exercise the real queries.
  */
 import { DemoData, DemoPersonKey } from '../demo/demo-data';
-import { cleanRecord, DirectoryKind, DirectoryRecord, FIELDS } from '../directory/rules';
+import { cleanRecord, DB_COLUMNS, DIRECTORY_KINDS, DirectoryKind, DirectoryRecord, FIELDS } from '../directory/rules';
 import { catalog } from '../inspection/catalog';
 import { finalAnswers, hasChanges, initialAnswers, summarize } from '../inspection/form';
 import { AnswerSet, Inspection, InspectionRow, InspectionStatus } from '../inspection/model';
-import { enqueue, OutboxOp } from '../inspection/sync';
+import { discardLocalChanges, enqueue, LocalVersion, markConflict, markFailed, markSent, OutboxOp } from '../inspection/sync';
+
+import { localChanged } from './changes';
+import type { RemoteDirectoryRow, RemoteInspection } from './sender';
 
 type Value = string | number | null;
 
@@ -49,6 +52,8 @@ export interface LocalAttachment {
   /** A file of this phone, or "demo:<file>" for a bundled demo image. */
   localUri: string | null;
   uploaded: boolean;
+  /** Where the server keeps the file, once it has it. */
+  storagePath?: string | null;
 }
 
 interface AttachmentDbRow {
@@ -132,14 +137,13 @@ const MIGRATIONS = [
   ALTER TABLE carriers ADD COLUMN synced_updated_at TEXT;
   ALTER TABLE vehicles ADD COLUMN synced_updated_at TEXT;
   `,
+  // 3 · F3f: where the server keeps each attachment file.
+  `
+  ALTER TABLE attachments ADD COLUMN storage_path TEXT;
+  `,
 ];
 
-/** The column of each directory field (the fields are named as in directory/rules.ts). */
-const COLUMNS: Record<DirectoryKind, Record<string, string>> = {
-  drivers: { name: 'name', idNumber: 'id_number', phone: 'phone' },
-  carriers: { name: 'name', contactName: 'contact_name' },
-  vehicles: { plate: 'plate', description: 'description' },
-};
+const COLUMNS = DB_COLUMNS;
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -275,6 +279,20 @@ export function localStore(db: Db) {
           op.attempts, op.retryAt, op.error],
       );
     }
+  }
+
+  /** The record's updated_at, to tell whether it changed while it was being sent. */
+  async function versionOf(op: OutboxOp): Promise<string | undefined> {
+    if (op.entity === 'inspection') {
+      return (await db.getFirstAsync<{ updated_at: string }>('SELECT updated_at FROM inspections WHERE id = ?', [op.entityId]))?.updated_at;
+    }
+    if (op.entity === 'directory') {
+      for (const kind of DIRECTORY_KINDS) {
+        const row = await db.getFirstAsync<{ updated_at: string }>(`SELECT updated_at FROM ${kind} WHERE id = ?`, [op.entityId]);
+        if (row) return row.updated_at;
+      }
+    }
+    return undefined;
   }
 
   async function clearAll() {
@@ -417,11 +435,15 @@ export function localStore(db: Db) {
         }
         saved = true;
       });
+      if (saved && live) localChanged();
       return saved;
     },
 
     async listAttachments(inspectionId: string): Promise<LocalAttachment[]> {
-      const rows = await db.getAllAsync<AttachmentDbRow>('SELECT * FROM attachments WHERE inspection_id = ?', [inspectionId]);
+      const rows = await db.getAllAsync<AttachmentDbRow & { storage_path: string | null }>(
+        'SELECT * FROM attachments WHERE inspection_id = ?',
+        [inspectionId],
+      );
       return rows.map((r) => ({
         id: r.id,
         inspectionId: r.inspection_id,
@@ -429,7 +451,13 @@ export function localStore(db: Db) {
         questionCode: r.question_code,
         localUri: r.local_uri,
         uploaded: r.uploaded === 1,
+        storagePath: r.storage_path,
       }));
+    },
+
+    /** A file downloaded from the server is now on the phone too. */
+    async setAttachmentFile(id: string, localUri: string) {
+      await db.runAsync('UPDATE attachments SET local_uri = ? WHERE id = ?', [localUri, id]);
     },
 
     /** Registers a file already stored on the phone, and queues its upload (it waits for its inspection, S5). */
@@ -444,6 +472,7 @@ export function localStore(db: Db) {
           await queue({ entity: 'attachment', entityId: a.id, parentId: a.inspectionId, action: 'upsert', existsOnServer: false }, now);
         }
       });
+      if (live) localChanged();
     },
 
     /**
@@ -520,6 +549,158 @@ export function localStore(db: Db) {
       });
     },
 
+    // ---------------------------------------------------------------- for the sender (F3f)
+
+    async getMeta(key: string): Promise<string | null> {
+      const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM meta WHERE key = ?', [key]);
+      return row?.value || null;
+    },
+
+    async setMeta(key: string, value: string) {
+      await db.runAsync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [key, value]);
+    },
+
+    /**
+     * Closes one outbox note after an attempt (S6-S8), touching only that note, so a
+     * change saved meanwhile is never lost. "sent" keeps the note when the record changed
+     * after it was read for sending (`sentVersion`): the new content still has to go.
+     */
+    async finishOp(op: OutboxOp, result: 'sent' | 'failed' | 'conflict', now: string, reason = '', sentVersion?: string) {
+      await db.withTransactionAsync(async () => {
+        const row = await db.getFirstAsync<OutboxDbRow>('SELECT * FROM outbox WHERE entity = ? AND entity_id = ?', [op.entity, op.entityId]);
+        if (!row) return;
+        const current = toOp(row);
+        if (result === 'sent' && sentVersion !== undefined && (await versionOf(current)) !== sentVersion) {
+          await db.runAsync("UPDATE outbox SET state = 'pending', attempts = 0, retry_at = NULL, error = NULL, creates_entity = 0 WHERE entity = ? AND entity_id = ?", [op.entity, op.entityId]);
+          return;
+        }
+        const after = result === 'sent' ? markSent([current], current) : result === 'failed' ? markFailed([current], current, now, reason) : markConflict([current], current, reason);
+        await db.runAsync('DELETE FROM outbox WHERE entity = ? AND entity_id = ?', [op.entity, op.entityId]);
+        for (const o of after) {
+          await db.runAsync('INSERT INTO outbox VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            o.entity, o.entityId, o.parentId, o.action, o.createsEntity ? 1 : 0, o.queuedAt, o.state, o.attempts, o.retryAt, o.error,
+          ]);
+        }
+      });
+    },
+
+    /** The inspection as the sender reads it, deleted ones included. */
+    async inspectionForSync(id: string) {
+      const row = await db.getFirstAsync<InspectionDbRow & { deleted_at: string | null }>('SELECT * FROM inspections WHERE id = ?', [id]);
+      return row ? { ...toInspection(row), deletedAt: row.deleted_at, syncedUpdatedAt: row.synced_updated_at } : null;
+    },
+
+    async markInspectionSynced(id: string, serverUpdatedAt: string) {
+      await db.runAsync('UPDATE inspections SET synced_updated_at = ? WHERE id = ?', [serverUpdatedAt, id]);
+    },
+
+    /** After the server accepted a deletion, nothing of it needs to stay on the phone. */
+    async forgetInspection(id: string) {
+      await db.withTransactionAsync(async () => {
+        await db.runAsync('DELETE FROM inspections WHERE id = ?', [id]);
+        await db.runAsync('DELETE FROM attachments WHERE inspection_id = ?', [id]);
+      });
+    },
+
+    async attachmentForSync(id: string) {
+      const row = await db.getFirstAsync<AttachmentDbRow & { storage_path: string | null }>('SELECT * FROM attachments WHERE id = ?', [id]);
+      return row
+        ? { id: row.id, inspectionId: row.inspection_id, kind: row.kind, questionCode: row.question_code, localUri: row.local_uri, storagePath: row.storage_path }
+        : null;
+    },
+
+    async markAttachmentUploaded(id: string, storagePath: string) {
+      await db.runAsync('UPDATE attachments SET uploaded = 1, storage_path = ? WHERE id = ?', [storagePath, id]);
+    },
+
+    /** A directory record by id, whatever its kind, deleted ones included. */
+    async directoryForSync(id: string) {
+      for (const kind of DIRECTORY_KINDS) {
+        const row = await db.getFirstAsync<Record<string, string | null>>(`SELECT * FROM ${kind} WHERE id = ?`, [id]);
+        if (row) {
+          const record: DirectoryRecord = { id };
+          for (const [key, column] of Object.entries(COLUMNS[kind])) record[key] = row[column] ?? '';
+          return { kind, record, deletedAt: row.deleted_at, updatedAt: row.updated_at as string, syncedUpdatedAt: row.synced_updated_at };
+        }
+      }
+      return null;
+    },
+
+    async markDirectorySynced(kind: DirectoryKind, id: string, serverUpdatedAt: string) {
+      await db.runAsync(`UPDATE ${kind} SET synced_updated_at = ? WHERE id = ?`, [serverUpdatedAt, id]);
+    },
+
+    /** What S10 needs to know about the phone's copy of an inspection. */
+    async localVersion(id: string): Promise<LocalVersion | null> {
+      const row = await db.getFirstAsync<InspectionDbRow>('SELECT * FROM inspections WHERE id = ?', [id]);
+      if (!row) return null;
+      const pending = await db.getFirstAsync<{ n: number }>(
+        "SELECT count(*) AS n FROM outbox WHERE (entity = 'inspection' AND entity_id = ?) OR parent_id = ?",
+        [id, id],
+      );
+      return { status: row.status, updatedAt: row.updated_at, syncedUpdatedAt: row.synced_updated_at, hasPendingChanges: (pending?.n ?? 0) > 0 };
+    },
+
+    /** S10: when the server's copy wins, the local notes of that inspection are dropped. */
+    async discardChanges(inspectionId: string) {
+      await db.withTransactionAsync(async () => {
+        const rows = await db.getAllAsync<OutboxDbRow>('SELECT * FROM outbox', []);
+        const kept = discardLocalChanges(rows.map(toOp), inspectionId);
+        await db.runAsync('DELETE FROM outbox', []);
+        for (const o of kept) {
+          await db.runAsync('INSERT INTO outbox VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            o.entity, o.entityId, o.parentId, o.action, o.createsEntity ? 1 : 0, o.queuedAt, o.state, o.attempts, o.retryAt, o.error,
+          ]);
+        }
+      });
+    },
+
+    /**
+     * Stores the server's copy of an inspection: the row, its answers and its attachments
+     * (files the phone does not have stay as paths on the server). A deleted one is
+     * removed. Returns the local files that are no longer needed.
+     */
+    async applyRemoteInspection(r: RemoteInspection): Promise<string[]> {
+      const unused: string[] = [];
+      await db.withTransactionAsync(async () => {
+        const known = await db.getAllAsync<AttachmentDbRow>('SELECT * FROM attachments WHERE inspection_id = ?', [r.id]);
+        const kept = new Set(r.deleted_at ? [] : r.attachments.map((a) => a.id));
+        unused.push(...known.filter((a) => !kept.has(a.id) && a.local_uri).map((a) => a.local_uri as string));
+        await db.runAsync('DELETE FROM attachments WHERE inspection_id = ?', [r.id]);
+        if (r.deleted_at) {
+          await db.runAsync('DELETE FROM inspections WHERE id = ?', [r.id]);
+          return;
+        }
+        const inspection: LocalInspection = {
+          id: r.id, status: r.status, currentStep: r.current_step, catalogVersion: r.catalog_version, inspectorName: r.inspector_name,
+          createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at, completedAt: r.completed_at,
+          reportGeneratedAt: r.report_generated_at, answers: r.answers,
+        };
+        await db.runAsync(SAVE_INSPECTION, inspectionValues(inspection, r.updated_at));
+        for (const a of r.attachments) {
+          const local = known.find((k) => k.id === a.id)?.local_uri ?? null;
+          await db.runAsync(
+            'INSERT INTO attachments (id, inspection_id, kind, question_code, local_uri, uploaded, created_at, storage_path) VALUES (?, ?, ?, ?, ?, 1, ?, ?)',
+            [a.id, r.id, a.kind, a.question_code, local, a.created_at, a.storage_path],
+          );
+        }
+      });
+      return unused;
+    },
+
+    /** The server's copy of a directory record; a deleted one is removed. */
+    async applyRemoteDirectory(kind: DirectoryKind, row: RemoteDirectoryRow) {
+      if (row.deleted_at) {
+        await db.runAsync(`DELETE FROM ${kind} WHERE id = ?`, [row.id]);
+        return;
+      }
+      const columns = Object.values(COLUMNS[kind]);
+      await db.runAsync(
+        `INSERT OR REPLACE INTO ${kind} (id, ${columns.join(', ')}, updated_at, deleted_at, synced_updated_at) VALUES (?, ${columns.map(() => '?').join(', ')}, ?, NULL, ?)`,
+        [row.id, ...columns.map((c) => row[c] ?? null), row.updated_at, row.updated_at],
+      );
+    },
+
     // ---------------------------------------------------------------- directory
 
     /** The records of one kind that are not deleted, as flat field sets. */
@@ -554,6 +735,7 @@ export function localStore(db: Db) {
           await queue({ entity: 'directory', entityId: clean.id, action: 'upsert', existsOnServer: row?.synced_updated_at != null }, now);
         }
       });
+      if (live) localChanged();
       return clean;
     },
 

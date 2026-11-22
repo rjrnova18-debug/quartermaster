@@ -9,6 +9,7 @@ import { catalog } from '@/inspection/catalog';
 import { buildReport, filterHistory, HistoryFilter, reportState, shareText } from '@/inspection/review';
 import { openReport, REPORT_ACTION } from '@/report/generate';
 import { useSession, useT } from '@/session';
+import { useSync } from '@/sync';
 import { PixelButton, Screen, TextButton, TextField, Txt } from '@/ui/controls';
 import { colors, space } from '@/ui/theme';
 
@@ -19,6 +20,7 @@ export default function HistoryScreen() {
   const { locale } = useSession();
   const tr = useT();
   const list = useInspections();
+  const sync = useSync();
   const [filter, setFilter] = useState<HistoryFilter>('all');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export default function HistoryScreen() {
   }
 
   return (
-    <Screen>
+    <Screen refreshing={sync.syncing} onRefresh={sync.live ? () => void sync.syncNow() : undefined}>
       <Txt variant="heading" accessibilityRole="header">
         {tr('history.title')}
       </Txt>

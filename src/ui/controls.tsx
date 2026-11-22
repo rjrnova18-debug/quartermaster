@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleProp,
   StyleSheet,
@@ -188,12 +189,16 @@ export function Sprite({ name }: { name: keyof typeof SPRITES }) {
 
 // ---------------------------------------------------------------- screen
 
-/** Safe area, paper background, scrolling, and room for the keyboard. */
-export function Screen({ children }: { children: React.ReactNode }) {
+/** Safe area, paper background, scrolling, and room for the keyboard. Pull down runs `onRefresh`. */
+export function Screen({ children, refreshing = false, onRefresh }: { children: React.ReactNode; refreshing?: boolean; onRefresh?: () => void }) {
   return (
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
+        >
           {children}
         </ScrollView>
       </KeyboardAvoidingView>

@@ -34,6 +34,15 @@ export const FIELDS: Record<DirectoryKind, FieldSpec[]> = {
   vehicles: [field('plate', { required: true, plate: true }), field('description')],
 };
 
+/** The database column of each field: the same on the phone and on the server. */
+export const DB_COLUMNS: Record<DirectoryKind, Record<string, string>> = {
+  drivers: { name: 'name', idNumber: 'id_number', phone: 'phone' },
+  carriers: { name: 'name', contactName: 'contact_name' },
+  vehicles: { plate: 'plate', description: 'description' },
+};
+
+export const DIRECTORY_KINDS: DirectoryKind[] = ['drivers', 'carriers', 'vehicles'];
+
 /** The field two records may not share (DATA-MODEL §1 "Unique"). */
 const UNIQUE: Record<DirectoryKind, string> = { drivers: 'idNumber', carriers: 'name', vehicles: 'plate' };
 

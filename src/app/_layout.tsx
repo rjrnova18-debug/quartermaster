@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { SessionProvider, useSession } from '@/session';
+import { SyncProvider } from '@/sync';
 import { colors } from '@/ui/theme';
 
 // Keep the splash screen until the fonts and the saved session are ready.
@@ -42,14 +43,16 @@ function Routes({ fontsLoaded }: { fontsLoaded: boolean }) {
   }
   const signedIn = state.status === 'signedIn';
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-      <Stack.Protected guard={signedIn}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="sign-in" />
-        <Stack.Screen name="demo" options={{ presentation: 'modal' }} />
-      </Stack.Protected>
-    </Stack>
+    <SyncProvider>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="demo" options={{ presentation: 'modal' }} />
+        </Stack.Protected>
+      </Stack>
+    </SyncProvider>
   );
 }

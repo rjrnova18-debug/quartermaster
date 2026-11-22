@@ -3,14 +3,15 @@
  * the screen comes back into view (after the form, for example).
  */
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { deleteFile } from '@/data/files';
 import { getLocal, LocalMode, LocalRow } from '@/data/local';
 import { displayCode } from '@/inspection/review';
-import { OutboxOp, syncBadge } from '@/inspection/sync';
+import { needsAttention, OutboxOp, syncBadge } from '@/inspection/sync';
 import { useSession, useT } from '@/session';
+import { useSync } from '@/sync';
 
 import { canDeleteInspection, syncLine } from './rules';
 
@@ -34,6 +35,10 @@ export function useInspections() {
       void load();
     }, [load]),
   );
+
+  // After every sync cycle, too: new copies may have arrived.
+  const { subscribe } = useSync();
+  useEffect(() => subscribe(() => void load()), [subscribe, load]);
 
   const user = state.status === 'signedIn' ? state.profile : null;
 
@@ -63,5 +68,8 @@ export function useInspections() {
     canDelete: (row: LocalRow) => user !== null && canDeleteInspection(row, user),
     confirmDelete,
     reload: load,
+    /** S8: the notes a person has to look at. */
+    attention: outbox.filter(needsAttention),
+    unsent: outbox.length,
   };
 }

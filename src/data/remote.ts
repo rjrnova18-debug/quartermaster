@@ -9,6 +9,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 
 import { Role } from '../inspection/model';
+import type { Changes, Outcome, SenderRemote } from './sender';
 import { secureStorage } from './secure-storage';
 
 // Expo copies EXPO_PUBLIC_ values into the app when it is built. Written with a dot on
@@ -120,3 +121,68 @@ export function watchSignOut(onSignedOut: () => void): () => void {
   });
   return () => data.subscription.unsubscribe();
 }
+
+// ---------------------------------------------------------------- the sender's server (F3f)
+
+const BUCKET = 'inspection-files';
+
+/**
+ * Sorts a failure: refusals the server will repeat (rules, permissions, duplicates) are
+ * conflicts that wait for a person (S8); anything else, like no signal, is retried (S7).
+ */
+export function outcomeOf(error: { message?: string; code?: string } | null, updatedAt?: string): Outcome {
+  if (!error) return { ok: true, updatedAt };
+  const reason = error.message || 'unknown error';
+  const refused =
+    /^(not_allowed|duplicate_trip_ref|invalid:)/.test(reason) ||
+    /row-level security/i.test(reason) ||
+    ['42501', '23505', '23514'].includes(error.code ?? '');
+  return { ok: false, conflict: refused, reason };
+}
+
+/** A short-lived link to download one stored file (the buckets are private). */
+export async function signedUrl(path: string): Promise<string | null> {
+  const { data, error } = await supabase().storage.from(BUCKET).createSignedUrl(path, 60);
+  return error ? null : data.signedUrl;
+}
+
+export const senderRemote: SenderRemote = {
+  async saveInspection(payload) {
+    const { data, error } = await supabase().rpc('save_inspection', { payload });
+    return outcomeOf(error, data?.updated_at);
+  },
+  async deleteInspection(id) {
+    return outcomeOf((await supabase().rpc('delete_inspection', { p_id: id })).error);
+  },
+  async removeInspectionFiles(id) {
+    const { data, error } = await supabase().storage.from(BUCKET).list(id);
+    if (error) return outcomeOf(error);
+    if (!data || data.length === 0) return { ok: true };
+    return outcomeOf((await supabase().storage.from(BUCKET).remove(data.map((f) => `${id}/${f.name}`))).error);
+  },
+  async removeFiles(paths) {
+    return outcomeOf((await supabase().storage.from(BUCKET).remove(paths)).error);
+  },
+  async uploadFile(path, localUri, contentType) {
+    const { File } = await import('expo-file-system'); // loaded here: only the phone has files
+    const bytes = await new File(localUri).bytes();
+    return outcomeOf((await supabase().storage.from(BUCKET).upload(path, bytes, { contentType, upsert: true })).error);
+  },
+  async saveAttachment(row) {
+    return outcomeOf((await supabase().rpc('save_attachment', { attachment: row })).error);
+  },
+  async deleteAttachment(id) {
+    return outcomeOf((await supabase().rpc('delete_attachment', { p_id: id })).error);
+  },
+  async saveDirectory(kind, row, isNew) {
+    const { id, ...fields } = row; // the id is never updated
+    const query = isNew ? supabase().from(kind).insert(row) : supabase().from(kind).update(fields).eq('id', id as string);
+    const { data, error } = await query.select('updated_at').single();
+    return outcomeOf(error, data?.updated_at);
+  },
+  async changesSince(since) {
+    const { data, error } = await supabase().rpc('changes_since', since ? { p_since: since } : {});
+    if (error) throw new Error(error.message);
+    return data as Changes;
+  },
+};

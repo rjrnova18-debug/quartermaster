@@ -120,7 +120,7 @@ and returns a new value. That is why the rules are tested without a phone or a s
 - [x] **F0 · Design** — architecture, open questions, pixel-art mock-up
 - [x] **F1 · Setup** — Expo app, domain package with its 102 tests, CI
 - [x] **F2 · Backend** — schema, row-level security, write functions, storage rules, access tests, demo seed
-- [ ] **F3 · Frontend** — pixel-art kit, form, photos and signatures, directory, history and PDF, offline sync
+- [x] **F3 · Frontend** — pixel-art kit, form, photos and signatures, directory, history and PDF, offline sync
 - [ ] **F4 · Security** — threat model, adversarial access tests, dependency and secret scanning
 - [ ] **F5 · Polish and release** — accessibility, Android APK, screenshots (v1.0)
 - [ ] **Next module · Equipment** — its own design phase after v1.0

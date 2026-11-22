@@ -91,6 +91,15 @@ export async function readAsDataUri(uri: string): Promise<string> {
   return `data:${fileUri.endsWith('.png') ? 'image/png' : 'image/jpeg'};base64,${toBase64(bytes)}`;
 }
 
+/** Downloads a file the phone does not have (it came from another device) and returns its path. */
+export async function downloadAttachment(url: string, storagePath: string, inspectionId: string, attachmentId: string): Promise<string> {
+  const extension = storagePath.split('.').pop() ?? 'jpg';
+  const target = new File(folder('attachments', inspectionId), `${attachmentId}.${extension}`);
+  if (target.exists) target.delete();
+  const file = await File.downloadFileAsync(url, target);
+  return file.uri;
+}
+
 /** Deletes one stored file. Bundled demo images are not files and are left alone. */
 export function deleteFile(uri: string | null) {
   if (!uri || uri.startsWith('demo:')) return;

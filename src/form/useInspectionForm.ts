@@ -12,7 +12,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { deleteFile, hasSavedSignature, keepAsSavedSignature, readSavedSignature, storePhoto, storeSignature } from '@/data/files';
+import { deleteFile, downloadAttachment, hasSavedSignature, keepAsSavedSignature, readSavedSignature, storePhoto, storeSignature } from '@/data/files';
+import { isServerConfigured, signedUrl } from '@/data/remote';
 import { getLocal, LocalAttachment, LocalInspection } from '@/data/local';
 import { MessageKey } from '@/i18n';
 import { catalog } from '@/inspection/catalog';
@@ -38,6 +39,25 @@ const AUTOSAVE_MS = 500;
 /** What the panel over the form is showing, if anything. */
 export type Panel = null | 'blocking' | 'warnings' | 'verdict' | 'cleared';
 
+/**
+ * Photos and signatures made on another phone are downloaded the first time they are
+ * needed. Returns the attachments as they are afterwards.
+ */
+async function fetchMissing(inspectionId: string, list: LocalAttachment[]): Promise<LocalAttachment[]> {
+  const missing = list.filter((a) => !a.localUri && a.storagePath);
+  if (!isServerConfigured() || missing.length === 0) return list;
+  const store = await getLocal();
+  for (const a of missing) {
+    try {
+      const url = await signedUrl(a.storagePath as string);
+      if (url) await store.setAttachmentFile(a.id, await downloadAttachment(url, a.storagePath as string, inspectionId, a.id));
+    } catch {
+      // offline or gone: the question shows no picture; the report says "not available offline"
+    }
+  }
+  return store.listAttachments(inspectionId);
+}
+
 export function useInspectionForm(id: string) {
   const { state } = useSession();
   const profile = state.status === 'signedIn' ? state.profile : null;
@@ -58,7 +78,11 @@ export function useInspectionForm(id: string) {
     getLocal()
       .then(async (store) => {
         const found = await store.getInspection(id);
-        if (found && active) setAttachments(await store.listAttachments(id));
+        if (found && active) {
+          const list = await store.listAttachments(id);
+          setAttachments(list);
+          fetchMissing(id, list).then((next) => active && setAttachments(next));
+        }
         return found;
       })
       .then((found) => {
@@ -142,6 +166,7 @@ export function useInspectionForm(id: string) {
   }
 
   // ---------------------------------------------------------------- photos and signatures
+
 
   /**
    * Stores a new attachment for a question and points the answer at it. The previous

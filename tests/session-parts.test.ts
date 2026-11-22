@@ -1,5 +1,5 @@
 /** The pure parts behind the sign-in screen: texts, encrypted storage and sign-in errors. */
-import { checkSignInForm, problemFromAuthError } from '../src/data/remote';
+import { checkSignInForm, outcomeOf, problemFromAuthError } from '../src/data/remote';
 import { chunkedStorage, KeyValueStore, PIECE_LENGTH } from '../src/data/secure-storage';
 import { localeFrom, t } from '../src/i18n';
 
@@ -82,6 +82,17 @@ describe('encrypted storage in pieces', () => {
     await storage.setItem('k', 'a'.repeat(PIECE_LENGTH * 2));
     await store.deleteItemAsync('k.1');
     expect(await storage.getItem('k')).toBeNull();
+  });
+});
+
+describe('server refusals and temporary failures', () => {
+  test('what the server will refuse again waits for a person (S8); the rest is retried (S7)', () => {
+    expect(outcomeOf(null, 'T')).toEqual({ ok: true, updatedAt: 'T' });
+    expect(outcomeOf({ message: 'duplicate_trip_ref', code: 'P0001' })).toMatchObject({ conflict: true });
+    expect(outcomeOf({ message: 'invalid: required TRIP_REF' })).toMatchObject({ conflict: true });
+    expect(outcomeOf({ message: 'new row violates row-level security policy' })).toMatchObject({ conflict: true });
+    expect(outcomeOf({ message: 'duplicate key value', code: '23505' })).toMatchObject({ conflict: true });
+    expect(outcomeOf({ message: 'TypeError: Network request failed', code: '' })).toMatchObject({ ok: false, conflict: false });
   });
 });
 

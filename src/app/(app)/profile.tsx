@@ -1,8 +1,13 @@
 import Constants from 'expo-constants';
 import { useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Alert, Image, StyleSheet, View } from 'react-native';
 
 import { deleteSavedSignature, hasSavedSignature, keepAsSavedSignature, savedSignatureUri } from '@/data/files';
+import { getLocal } from '@/data/local';
+import { useInspections } from '@/home/useInspections';
+import { displayCode } from '@/inspection/review';
+import { OutboxOp } from '@/inspection/sync';
+import { useSync } from '@/sync';
 import { SignaturePad } from '@/form/SignaturePad';
 import { SIGNATURE_HEIGHT, SIGNATURE_WIDTH } from '@/form/signature';
 import { catalog } from '@/inspection/catalog';
@@ -20,9 +25,34 @@ export default function ProfileScreen() {
   const tr = useT();
   const [signing, setSigning] = useState(false);
   const [version, setVersion] = useState(0); // bumped when the signature changes, to show the new one
+  const sync = useSync();
+  const list = useInspections();
   if (state.status !== 'signedIn') return null;
   const { profile, demo } = state;
   const saved = hasSavedSignature();
+
+  /** Signing out erases the phone; unsent changes would be lost, so ask first (ACCESS.md §1). */
+  function confirmSignOut() {
+    if (demo || list.unsent === 0) {
+      void signOut();
+      return;
+    }
+    Alert.alert(tr('signOut.title'), tr('signOut.unsent', { count: list.unsent }), [
+      { text: tr('common.cancel'), style: 'cancel' },
+      { text: tr('home.signOut'), style: 'destructive', onPress: () => void signOut() },
+    ]);
+  }
+
+  /** S8 "not allowed": drop the local changes; the next pull brings the server's copy back. */
+  async function discard(op: OutboxOp) {
+    const store = await getLocal();
+    await store.discardChanges(op.parentId ?? op.entityId);
+    await store.setMeta('last_pull_at', '');
+    await sync.syncNow();
+  }
+
+  const messageOf = (op: OutboxOp) =>
+    op.error === 'duplicate_trip_ref' ? tr('sync.duplicate') : op.error === 'not_allowed' ? tr('sync.notAllowed') : tr('sync.failedWith', { error: op.error ?? '' });
 
   return (
     <Screen>
@@ -77,11 +107,37 @@ export default function ProfileScreen() {
         />
       ) : null}
 
+      {sync.live ? (
+        <>
+          <Txt variant="label">{tr('sync.title')}</Txt>
+          <Txt variant="small" color={list.attention.length > 0 ? colors.error : colors.textMuted}>
+            {list.syncLine.kind === 'synced'
+              ? tr('sync.allSynced')
+              : tr(list.syncLine.kind === 'waiting' ? 'sync.waiting' : 'sync.attention', { count: list.syncLine.count })}
+          </Txt>
+          {sync.lastError ? <Txt variant="small" color={colors.error}>{tr('sync.error', { error: sync.lastError })}</Txt> : null}
+          <PixelButton
+            variant="secondary"
+            label={tr('sync.now')}
+            busyLabel={tr('sync.running')}
+            busy={sync.syncing}
+            onPress={() => void sync.syncNow()}
+          />
+          {list.attention.map((op) => (
+            <Frame key={`${op.entity}-${op.entityId}`} name="card" padding={space.xs}>
+              <Txt variant="label">{displayCode(op.parentId ?? op.entityId)}</Txt>
+              <Txt variant="small">{messageOf(op)}</Txt>
+              {op.error === 'not_allowed' ? <TextButton label={tr('sync.discard')} onPress={() => void discard(op)} /> : null}
+            </Frame>
+          ))}
+        </>
+      ) : null}
+
       <Txt variant="small" color={colors.textMuted}>
         {tr('profile.versions', { app: Constants.expoConfig?.version ?? '?', form: catalog.version })}
       </Txt>
       <View style={styles.spacer} />
-      <PixelButton variant="secondary" label={demo ? tr('home.leaveDemo') : tr('home.signOut')} onPress={signOut} />
+      <PixelButton variant="secondary" label={demo ? tr('home.leaveDemo') : tr('home.signOut')} onPress={confirmSignOut} />
     </Screen>
   );
 }

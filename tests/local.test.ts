@@ -2,56 +2,18 @@
  * The phone database, run against a real SQLite: Node's own, in memory. The SQL is the
  * same one expo-sqlite runs on the phone.
  */
-import { DatabaseSync } from 'node:sqlite';
-
-import { Db, localStore, SCHEMA_VERSION } from '../src/data/local';
+import { localStore, SCHEMA_VERSION } from '../src/data/local';
 import { buildDemoData } from '../src/demo/demo-data';
 import { reportState } from '../src/inspection/review';
 import { AnswerSet } from '../src/inspection/model';
 
-type Params = (string | number | null)[];
-
-/** Node's SQLite behind the same async interface expo-sqlite offers. */
-function nodeDb(): Db {
-  const db = new DatabaseSync(':memory:');
-  return {
-    async execAsync(sql) {
-      db.exec(sql);
-    },
-    async runAsync(sql, params: Params) {
-      return db.prepare(sql).run(...params);
-    },
-    async getAllAsync<T>(sql: string, params: Params) {
-      return db.prepare(sql).all(...params) as T[];
-    },
-    async getFirstAsync<T>(sql: string, params: Params) {
-      return (db.prepare(sql).get(...params) as T | undefined) ?? null;
-    },
-    async withTransactionAsync(task) {
-      db.exec('BEGIN');
-      try {
-        await task();
-        db.exec('COMMIT');
-      } catch (error) {
-        db.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  };
-}
+import { freshStore } from './node-sqlite';
 
 const TODAY = '2026-03-10';
 const NOW = '2026-03-10T15:00:00.000Z';
 const LATER = '2026-03-10T15:05:00.000Z';
 
-async function freshStore() {
-  const db = nodeDb();
-  const store = localStore(db);
-  await store.migrate();
-  return { db, store };
-}
-
-async function newDraft(store: Awaited<ReturnType<typeof freshStore>>['store'], id = 'insp-1') {
+async function newDraft(store: ReturnType<typeof localStore>, id = 'insp-1') {
   return store.createInspection({ id, createdBy: 'user-1', inspectorName: 'Sam Field', today: TODAY, now: NOW });
 }
 
@@ -130,7 +92,7 @@ describe('attachments', () => {
     await store.startLive();
     await newDraft(store);
     await store.addAttachment(photo, LATER);
-    expect(await store.listAttachments('insp-1')).toEqual([{ ...photo, uploaded: false }]);
+    expect(await store.listAttachments('insp-1')).toEqual([{ ...photo, uploaded: false, storagePath: null }]);
     expect((await store.outbox()).map((op) => [op.entity, op.entityId, op.parentId])).toEqual([
       ['inspection', 'insp-1', null],
       ['attachment', 'photo-1', 'insp-1'],
