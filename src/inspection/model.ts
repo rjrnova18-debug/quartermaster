@@ -106,6 +106,9 @@ export type AnswerSet = Record<string, Answer>;
 
 export type InspectionStatus = 'draft' | 'completed';
 
+/** What a signed-in person may do (ACCESS.md). */
+export type Role = 'inspector' | 'supervisor';
+
 export type InspectionSummary = Record<SummaryField, string | null>;
 
 export interface Inspection {

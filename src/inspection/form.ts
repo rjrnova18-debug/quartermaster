@@ -9,8 +9,10 @@ import {
   AnswerSet,
   Catalog,
   DirectoryName,
+  InspectionStatus,
   InspectionSummary,
   Question,
+  Role,
   SummaryField,
 } from './model';
 
@@ -358,4 +360,43 @@ export function summarize(catalog: Catalog, answers: AnswerSet): InspectionSumma
     summary[field] = value === '' ? null : value;
   }
   return summary;
+}
+
+// ---------------------------------------------------------------- F19 correction window
+
+/** How long an inspector may still correct an inspection after completing it. */
+export const CORRECTION_WINDOW_HOURS = 24;
+
+/** The fields of an inspection that decide who may change it. */
+export interface EditableInspection {
+  status: InspectionStatus;
+  createdBy: string;
+  completedAt: string | null;
+}
+
+/**
+ * F19. Whether this person may still change an inspection. A supervisor always may;
+ * an inspector only their own, while it is a draft or for 24 hours after completing it.
+ * The database enforces the same rule (private.can_edit_inspection); this copy lets the
+ * app show the form read-only instead of failing on save.
+ */
+export function canEditInspection(
+  inspection: EditableInspection,
+  user: { id: string; role: Role },
+  now: string,
+): boolean {
+  if (user.role === 'supervisor') {
+    return true;
+  }
+  if (inspection.createdBy !== user.id) {
+    return false;
+  }
+  if (inspection.status === 'draft') {
+    return true;
+  }
+  if (inspection.completedAt === null) {
+    return false;
+  }
+  const elapsed = Date.parse(now) - Date.parse(inspection.completedAt);
+  return elapsed < CORRECTION_WINDOW_HOURS * 60 * 60 * 1000;
 }

@@ -11,6 +11,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "test:db": "jest -c jest.db.config.js --runInBand",
     "gen:catalog": "node scripts/gen-catalog-sql.js"
   },
   "jest": {
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@expo/ui": "~58.0.29",
+    "@supabase/supabase-js": "^2.119.2",
     "expo": "~58.0.26",
     "expo-constants": "~58.0.16",
     "expo-device": "~58.0.5",

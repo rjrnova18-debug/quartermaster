@@ -3,6 +3,7 @@ import {
   applicableSteps,
   applyDirectoryRecord,
   canComplete,
+  canEditInspection,
   finalAnswers,
   findDuplicateTripRef,
   hasChanges,
@@ -320,5 +321,30 @@ describe('F18 summary', () => {
       driverName: null,
       verdict: 'FIT',
     });
+  });
+});
+
+describe('F19 correction window', () => {
+  const inspector = { id: 'u1', role: 'inspector' as const };
+  const supervisor = { id: 's1', role: 'supervisor' as const };
+  const completed = { status: 'completed' as const, createdBy: 'u1', completedAt: '2026-03-04T10:00:00Z' };
+
+  test('an inspector edits their own draft', () => {
+    const draft = { status: 'draft' as const, createdBy: 'u1', completedAt: null };
+    expect(canEditInspection(draft, inspector, '2026-03-10T00:00:00Z')).toBe(true);
+  });
+
+  test('an inspector never edits someone else\'s inspection', () => {
+    const others = { ...completed, createdBy: 'u2' };
+    expect(canEditInspection(others, inspector, '2026-03-04T10:05:00Z')).toBe(false);
+  });
+
+  test('an inspector corrects a completed inspection only within 24 hours', () => {
+    expect(canEditInspection(completed, inspector, '2026-03-05T09:59:59Z')).toBe(true);
+    expect(canEditInspection(completed, inspector, '2026-03-05T10:00:00Z')).toBe(false);
+  });
+
+  test('a supervisor may always edit', () => {
+    expect(canEditInspection(completed, supervisor, '2027-01-01T00:00:00Z')).toBe(true);
   });
 });
