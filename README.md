@@ -50,6 +50,8 @@ npm install
 npm start                # scan the QR code with Expo Go
 ```
 
+Without a `.env` the app still opens: **Try the demo** needs no account and no server.
+
 To run the backend on your own free Supabase project:
 
 ```bash
@@ -74,6 +76,7 @@ by invitation only.
 | `npm run seed` | Loads the demo data; running it again replaces it |
 | `npm run gen:catalog` | Writes the catalog migration from `catalog/questions.json` |
 | `npm run gen:demo-images` | Redraws the placeholder photos and signatures (Python 3) |
+| `npm run gen:ui` | Exports the pixel-art frames and sprites the screens use (Python 3) |
 
 ## Project structure
 
@@ -81,14 +84,19 @@ by invitation only.
 quartermaster/
 ├── src/
 │   ├── app/            # screens (Expo Router: one file = one screen)
+│   ├── ui/             # pixel-art kit: palette, nine-slice frames, buttons, fields
+│   ├── data/           # Supabase client and encrypted session storage
 │   ├── inspection/     # inspection rules: pure TypeScript, no React Native, no Supabase
-│   └── demo/           # the invented demo data, used by the seed and the demo mode
+│   ├── demo/           # the invented demo data, used by the seed and the demo mode
+│   ├── session.tsx     # who is signed in, language, connection
+│   └── i18n.ts         # every interface text in English and Spanish
 ├── catalog/            # questions.json: the inspection form as data
 ├── tests/              # one test file per domain module, one describe per rule
 ├── tests-db/           # access tests against a real Supabase project (not in CI)
 ├── supabase/           # database configuration and migrations
 ├── scripts/            # catalog migration generator and demo seed
 ├── tools/              # pixel-art generators (sprites and demo images)
+├── assets/ui/          # frame corners and sprites, exported at @2x and @3x
 ├── assets/demo/        # placeholder photos and signatures
 └── .github/workflows/  # CI
 ```
