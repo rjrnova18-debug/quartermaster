@@ -60,6 +60,15 @@ export async function readSavedSignature(): Promise<Uint8Array> {
   return savedSignature().bytes();
 }
 
+export function savedSignatureUri(): string {
+  return savedSignature().uri;
+}
+
+export function deleteSavedSignature() {
+  const file = savedSignature();
+  if (file.exists) file.delete();
+}
+
 /** Deletes one stored file. Bundled demo images are not files and are left alone. */
 export function deleteFile(uri: string | null) {
   if (!uri || uri.startsWith('demo:')) return;

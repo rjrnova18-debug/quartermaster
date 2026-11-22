@@ -39,6 +39,7 @@ interface SessionValue {
 
 const PROFILE_KEY = 'qm.profile';
 const DEMO_KEY = 'qm.demo';
+const LOCALE_KEY = 'qm.locale';
 
 const SessionContext = createContext<SessionValue | null>(null);
 
@@ -73,13 +74,22 @@ async function restore(): Promise<SessionState> {
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<SessionState>({ status: 'loading' });
-  const [locale, setLocale] = useState<Locale>(deviceLocale);
+  const [locale, setLocaleState] = useState<Locale>(deviceLocale);
   const network = Network.useNetworkState();
   const online = network.isInternetReachable !== false && network.isConnected !== false;
 
   useEffect(() => {
     restore().then(setState, () => setState({ status: 'signedOut' }));
+    // The language chosen in Profile wins over the phone's language.
+    secureStorage.getItem(LOCALE_KEY).then((saved) => {
+      if (saved === 'en' || saved === 'es') setLocaleState(saved);
+    });
   }, []);
+
+  function setLocale(next: Locale) {
+    setLocaleState(next);
+    void secureStorage.setItem(LOCALE_KEY, next);
+  }
 
   // Creating the client also lets Supabase check the saved session in the background.
   useEffect(() => {

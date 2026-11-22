@@ -160,6 +160,30 @@ describe('attachments', () => {
   });
 });
 
+describe('deleting an inspection', () => {
+  test('a draft the server never saw disappears with its photos and every note (S2, S3)', async () => {
+    const { store } = await freshStore();
+    await store.startLive();
+    await newDraft(store);
+    await store.addAttachment({ id: 'p1', inspectionId: 'insp-1', kind: 'photo', questionCode: 'PHOTO_ARRIVAL', localUri: 'file:///p1.jpg' }, NOW);
+    expect(await store.deleteInspection('insp-1', LATER)).toEqual(['file:///p1.jpg']);
+    expect(await store.listInspections()).toEqual([]);
+    expect(await store.listAttachments('insp-1')).toEqual([]);
+    expect(await store.outbox()).toEqual([]);
+  });
+
+  test('one the server has is marked deleted and its deletion queued', async () => {
+    const { db, store } = await freshStore();
+    await store.startLive();
+    await newDraft(store);
+    await db.runAsync("UPDATE inspections SET synced_updated_at = ? WHERE id = 'insp-1'", [NOW]);
+    await db.runAsync('DELETE FROM outbox', []);
+    await store.deleteInspection('insp-1', LATER);
+    expect(await store.listInspections()).toEqual([]);
+    expect(await store.outbox()).toMatchObject([{ entity: 'inspection', entityId: 'insp-1', action: 'delete' }]);
+  });
+});
+
 describe('directory', () => {
   test('a new driver is cleaned, listed and queued; editing keeps one note', async () => {
     const { store } = await freshStore();

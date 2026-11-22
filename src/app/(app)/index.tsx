@@ -1,46 +1,30 @@
 import { randomUUID } from 'expo-crypto';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
 import { getLocal } from '@/data/local';
+import { CardAction, InspectionCard } from '@/home/InspectionCard';
+import { useInspections } from '@/home/useInspections';
 import { localDate } from '@/i18n';
-import { catalog } from '@/inspection/catalog';
-import { isAnswerable } from '@/inspection/form';
-import { InspectionRow } from '@/inspection/model';
-import { displayCode } from '@/inspection/review';
+import { homeSummary } from '@/inspection/review';
 import { useSession, useT } from '@/session';
 import { Frame } from '@/ui/Frame';
 import { PixelButton, Screen, Sprite, Txt } from '@/ui/controls';
-import { colors, space } from '@/ui/theme';
+import { colors, palette, space } from '@/ui/theme';
 
 /**
- * Home, for now: who is signed in, "New inspection" and the inspections on the phone.
- * The real home (counters, drafts to continue, sync line) is built in F3e.
+ * Home (UI-BRIEF §4): greeting, today's numbers (R6), "New inspection", the drafts to
+ * continue, the way to History, Directory and Profile, and the sync line.
  */
 export default function HomeScreen() {
-  const { state, signOut, locale } = useSession();
+  const { state } = useSession();
   const tr = useT();
-  const [rows, setRows] = useState<InspectionRow[]>([]);
+  const list = useInspections();
+  if (state.status !== 'signedIn') return null;
 
-  // Reload whenever the screen comes back into view (after the form, for example).
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      getLocal()
-        .then((store) => store.listInspections())
-        .then((list) => active && setRows(list));
-      return () => {
-        active = false;
-      };
-    }, []),
-  );
-
-  if (state.status !== 'signedIn') {
-    return null;
-  }
-  const { profile, demo } = state;
-  const firstName = profile.fullName.split(' ')[0];
+  const { profile } = state;
+  const summary = homeSummary(list.rows, localDate());
+  const resume = summary.resume.map((r) => list.rows.find((row) => row.id === r.id)!);
 
   async function newInspection() {
     const store = await getLocal();
@@ -55,61 +39,74 @@ export default function HomeScreen() {
     router.push({ pathname: '/inspection/[id]', params: { id: created.id } });
   }
 
-  const unitLabel = (code: string | null) => catalog.unitTypes.find((u) => u.code === code)?.label[locale];
+  const sync = list.syncLine;
+  const syncText = list.demo
+    ? tr('sync.demo')
+    : sync.kind === 'synced'
+      ? tr('sync.allSynced')
+      : tr(sync.kind === 'waiting' ? 'sync.waiting' : 'sync.attention', { count: sync.count });
 
   return (
     <Screen>
       <Sprite name="yardScene" />
-      <View style={styles.greeting}>
-        <Txt variant="heading" accessibilityRole="header">
-          {tr('home.greeting', { name: firstName })}
-        </Txt>
-        <Txt color={colors.textMuted}>
-          {profile.fullName} · {tr(`role.${profile.role}`)}
-        </Txt>
+      <Txt variant="heading" accessibilityRole="header">
+        {tr('home.greeting', { name: profile.fullName.split(' ')[0] })}
+      </Txt>
+
+      <View style={styles.counters}>
+        <Counter value={summary.inspectionsToday} label={tr('home.today')} />
+        <Counter value={summary.draftsPending} label={tr('home.drafts')} />
       </View>
 
-      <PixelButton label={tr('home.newInspection')} onPress={newInspection} />
-      <PixelButton variant="secondary" label={tr('home.directory')} onPress={() => router.push('/directory')} />
+      <PixelButton label={tr('home.newInspection')} onPress={newInspection} style={styles.main} />
 
-      <Txt variant="label">{tr('home.inspections')}</Txt>
-      {rows.length === 0 ? <Txt color={colors.textMuted}>{tr('home.empty')}</Txt> : null}
-      {rows.map((row) => (
-        <Pressable
+      <Txt variant="label">{tr('home.continue')}</Txt>
+      {resume.length === 0 ? <Txt color={colors.textMuted}>{tr('home.noDrafts')}</Txt> : null}
+      {resume.map((row) => (
+        <InspectionCard
           key={row.id}
-          onPress={() => router.push({ pathname: '/inspection/[id]', params: { id: row.id } })}
-          accessibilityRole="button"
-        >
-          <Frame name="card" padding={space.xs}>
-            <View style={styles.rowTop}>
-              <Txt variant="label">{displayCode(row.id)}</Txt>
-              <Txt variant="small" color={row.status === 'draft' ? colors.warningText : colors.text}>
-                {tr(`status.${row.status}`)}
-              </Txt>
-            </View>
-            <Txt variant="small">
-              {[row.summary.tripRef ?? tr('home.noReference'), unitLabel(row.summary.unitType), row.summary.inspectionDate]
-                .filter(Boolean)
-                .join(' · ')}
-            </Txt>
-          </Frame>
-        </Pressable>
+          row={row}
+          badge={list.demo ? null : list.badgeOf(row.id)}
+          showStep
+          actions={list.canDelete(row) ? <CardAction label={tr('common.delete')} onPress={() => list.confirmDelete(row)} /> : null}
+        />
       ))}
 
-      <Txt variant="small" color={colors.textMuted}>
-        {tr('home.comingSoon')}{' '}
-        {tr('home.formVersion', {
-          version: catalog.version,
-          questions: catalog.questions.filter(isAnswerable).length,
-          steps: catalog.steps.length,
-        })}
+      <View style={styles.entries}>
+        <PixelButton variant="secondary" label={tr('home.history')} onPress={() => router.push('/history')} style={styles.entry} />
+        <PixelButton variant="secondary" label={tr('home.directory')} onPress={() => router.push('/directory')} style={styles.entry} />
+        <PixelButton variant="secondary" label={tr('home.profile')} onPress={() => router.push('/profile')} style={styles.entry} />
+      </View>
+
+      <Txt
+        variant="small"
+        color={!list.demo && sync.kind === 'attention' ? colors.error : colors.textMuted}
+        accessibilityLiveRegion="polite"
+      >
+        {syncText}
       </Txt>
-      <PixelButton variant="secondary" label={demo ? tr('home.leaveDemo') : tr('home.signOut')} onPress={signOut} />
     </Screen>
   );
 }
 
+function Counter({ value, label }: { value: number; label: string }) {
+  return (
+    <Frame name="panel" padding={space.xs} style={styles.counter}>
+      <Txt variant="title" color={palette.orangeDark} style={styles.center}>
+        {value}
+      </Txt>
+      <Txt variant="small" style={styles.center}>
+        {label}
+      </Txt>
+    </Frame>
+  );
+}
+
 const styles = StyleSheet.create({
-  greeting: { gap: space.xs },
-  rowTop: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s },
+  counters: { flexDirection: 'row', gap: space.s },
+  counter: { flex: 1 },
+  center: { textAlign: 'center' },
+  main: { minHeight: 72 },
+  entries: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
+  entry: { flexGrow: 1 },
 });

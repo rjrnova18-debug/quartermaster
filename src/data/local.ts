@@ -27,6 +27,12 @@ export interface Db {
   withTransactionAsync(task: () => Promise<void>): Promise<void>;
 }
 
+/** A list row plus what the home and history screens also need. */
+export interface LocalRow extends InspectionRow {
+  createdBy: string;
+  currentStep: number;
+}
+
 /** An inspection as the phone keeps it: the domain record plus who created it. */
 export interface LocalInspection extends Inspection {
   createdBy: string;
@@ -174,9 +180,11 @@ interface OutboxDbRow {
   error: string | null;
 }
 
-function toRow(row: InspectionDbRow): InspectionRow {
+function toRow(row: InspectionDbRow): LocalRow {
   return {
     id: row.id,
+    createdBy: row.created_by,
+    currentStep: row.current_step,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -337,7 +345,7 @@ export function localStore(db: Db) {
     },
 
     /** The list screens' rows, newest change first. Deleted ones are left out. */
-    async listInspections(): Promise<InspectionRow[]> {
+    async listInspections(): Promise<LocalRow[]> {
       const rows = await db.getAllAsync<InspectionDbRow>(
         'SELECT * FROM inspections WHERE deleted_at IS NULL ORDER BY updated_at DESC',
         [],
@@ -458,6 +466,33 @@ export function localStore(db: Db) {
         }
       });
       return localUri;
+    },
+
+    /**
+     * Deletes an inspection with its attachments. One the server has is only marked
+     * (deleted_at) and its deletion queued; one it never saw disappears with its notes
+     * (S2, S3). Returns the files to delete from the phone.
+     */
+    async deleteInspection(id: string, now: string): Promise<string[]> {
+      const live = (await getMode()) !== 'demo';
+      const files: string[] = [];
+      await db.withTransactionAsync(async () => {
+        const row = await db.getFirstAsync<InspectionDbRow>('SELECT * FROM inspections WHERE id = ?', [id]);
+        if (!row) return;
+        const attachments = await db.getAllAsync<AttachmentDbRow>('SELECT * FROM attachments WHERE inspection_id = ?', [id]);
+        files.push(...attachments.map((a) => a.local_uri).filter((uri): uri is string => uri !== null));
+        const known = row.synced_updated_at !== null;
+        if (known) {
+          await db.runAsync('UPDATE inspections SET deleted_at = ? WHERE id = ?', [now, id]);
+        } else {
+          await db.runAsync('DELETE FROM inspections WHERE id = ?', [id]);
+        }
+        await db.runAsync('DELETE FROM attachments WHERE inspection_id = ?', [id]);
+        if (live) {
+          await queue({ entity: 'inspection', entityId: id, action: 'delete', existsOnServer: known }, now);
+        }
+      });
+      return files;
     },
 
     // ---------------------------------------------------------------- directory
