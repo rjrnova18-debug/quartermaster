@@ -10,10 +10,12 @@ import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { imageSource } from '@/data/files';
+import { DirectoryPicker } from '@/directory/DirectoryViews';
+import { DirectoryRecord, FIELDS } from '@/directory/rules';
 import { MessageKey } from '@/i18n';
 import { catalog } from '@/inspection/catalog';
 import { isValidContainerNumber } from '@/inspection/form';
-import { Answer, CheckValue, Locale, Question } from '@/inspection/model';
+import { Answer, CheckValue, DirectoryName, Locale, Question } from '@/inspection/model';
 import { displayValue } from '@/inspection/review';
 import { FrameName, SPRITES } from '@/ui/assets.generated';
 import { Frame } from '@/ui/Frame';
@@ -34,6 +36,8 @@ interface Props {
   onAnswer: (value: string | null) => void;
   onNote: (note: string) => void;
   media: Media;
+  onPickRecord: (directory: DirectoryName, record: DirectoryRecord) => void;
+  canEditDirectory: boolean;
 }
 
 /** What photo and signature questions need from the form (useInspectionForm). */
@@ -74,6 +78,7 @@ export function QuestionView(props: Props) {
         ) : null}
       </View>
       <Control {...props} />
+      <PickFromDirectory {...props} />
       {question.code === catalog.summary.containerNo && value.trim() !== '' && !isValidContainerNumber(value) ? (
         <Notice text={tr('form.containerHint')} />
       ) : null}
@@ -370,6 +375,32 @@ function SignatureControl({ question, answer, locale, editable, tr, media }: Pro
         />
       ) : null}
     </View>
+  );
+}
+
+// ---------------------------------------------------------------- directory (F15)
+
+/** Shown once per directory: on the question that holds the record's name or plate. */
+function PickFromDirectory({ question, editable, tr, onPickRecord, canEditDirectory }: Props) {
+  const [open, setOpen] = useState(false);
+  const link = question.filledFrom;
+  if (!link || !editable || FIELDS[link.directory][0].key !== link.field) return null;
+  return (
+    <>
+      <TextButton label={tr('directory.pick')} onPress={() => setOpen(true)} />
+      {open ? (
+        <DirectoryPicker
+          kind={link.directory}
+          tr={tr}
+          canEdit={canEditDirectory}
+          onClose={() => setOpen(false)}
+          onPick={(record) => {
+            setOpen(false);
+            onPickRecord(link.directory, record);
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 

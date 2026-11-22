@@ -70,6 +70,7 @@ export default function HomeScreen() {
       </View>
 
       <PixelButton label={tr('home.newInspection')} onPress={newInspection} />
+      <PixelButton variant="secondary" label={tr('home.directory')} onPress={() => router.push('/directory')} />
 
       <Txt variant="label">{tr('home.inspections')}</Txt>
       {rows.length === 0 ? <Txt color={colors.textMuted}>{tr('home.empty')}</Txt> : null}

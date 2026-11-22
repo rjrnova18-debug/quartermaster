@@ -160,6 +160,46 @@ describe('attachments', () => {
   });
 });
 
+describe('directory', () => {
+  test('a new driver is cleaned, listed and queued; editing keeps one note', async () => {
+    const { store } = await freshStore();
+    await store.startLive();
+    await store.saveDirectoryRecord('drivers', { id: 'd1', name: ' Ana  Diaz ', idNumber: '90314159', phone: '' }, NOW);
+    expect(await store.listDirectory('drivers')).toEqual([{ id: 'd1', name: 'Ana Diaz', idNumber: '90314159', phone: '' }]);
+    await store.saveDirectoryRecord('drivers', { id: 'd1', name: 'Ana Diaz', idNumber: '90314159', phone: '5552100400' }, LATER);
+    expect((await store.listDirectory('drivers'))[0].phone).toBe('5552100400');
+    expect(await store.outbox()).toMatchObject([{ entity: 'directory', entityId: 'd1', createsEntity: true }]);
+  });
+
+  test('deleting a record the server never saw removes it and its note (S3)', async () => {
+    const { store } = await freshStore();
+    await store.startLive();
+    await store.saveDirectoryRecord('vehicles', { id: 'v1', plate: 'klm-204', description: '' }, NOW);
+    await store.deleteDirectoryRecord('vehicles', 'v1', LATER);
+    expect(await store.listDirectory('vehicles')).toEqual([]);
+    expect(await store.outbox()).toEqual([]);
+  });
+
+  test('deleting a record the server has only marks it, and queues the change', async () => {
+    const { db, store } = await freshStore();
+    await store.startLive();
+    await store.saveDirectoryRecord('carriers', { id: 'c1', name: 'Bluefin Freight', contactName: '' }, NOW);
+    await db.runAsync("UPDATE carriers SET synced_updated_at = ? WHERE id = 'c1'", [NOW]);
+    await db.runAsync('DELETE FROM outbox', []);
+    await store.deleteDirectoryRecord('carriers', 'c1', LATER);
+    expect(await store.listDirectory('carriers')).toEqual([]);
+    expect(await db.getFirstAsync('SELECT deleted_at FROM carriers WHERE id = ?', ['c1'])).toEqual({ deleted_at: LATER });
+    expect(await store.outbox()).toMatchObject([{ entity: 'directory', entityId: 'c1', action: 'upsert', createsEntity: false }]);
+  });
+
+  test('the demo directory is on the phone', async () => {
+    const { store } = await freshStore();
+    await store.loadDemo(buildDemoData(TODAY, NOW), 'sam', NOW);
+    expect(await store.listDirectory('drivers')).toHaveLength(10);
+    expect(await store.listDirectory('carriers')).toHaveLength(6);
+  });
+});
+
 describe('demo mode', () => {
   const data = buildDemoData(TODAY, NOW);
 

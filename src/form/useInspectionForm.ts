@@ -17,6 +17,7 @@ import { getLocal, LocalAttachment, LocalInspection } from '@/data/local';
 import { MessageKey } from '@/i18n';
 import { catalog } from '@/inspection/catalog';
 import {
+  applyDirectoryRecord,
   applicableSteps,
   canComplete,
   canEditInspection,
@@ -27,7 +28,8 @@ import {
   Problem,
   stepProblems,
 } from '@/inspection/form';
-import { AnswerSet, InspectionStatus } from '@/inspection/model';
+import { AnswerSet, DirectoryName, InspectionStatus } from '@/inspection/model';
+import { DirectoryRecord } from '@/directory/rules';
 import { verdictNeedsReview } from '@/inspection/review';
 import { useSession } from '@/session';
 
@@ -127,6 +129,12 @@ export function useInspectionForm(id: string) {
       }
       return next;
     });
+  }
+
+  /** F15: copies a directory record into every question linked to its directory. */
+  function fillFromDirectory(directory: DirectoryName, record: DirectoryRecord) {
+    setRefused(false);
+    setAnswers((current) => applyDirectoryRecord(catalog, current, directory, record));
   }
 
   function setNote(code: string, note: string) {
@@ -299,6 +307,8 @@ export function useInspectionForm(id: string) {
     pending,
     problemOf,
     media,
+    fillFromDirectory,
+    canEditDirectory: profile?.role === 'supervisor',
     setAnswer,
     setNote,
     goNext,

@@ -71,6 +71,8 @@ export default function InspectionScreen() {
               onAnswer={(value) => form.setAnswer(question.code, value)}
               onNote={(note) => form.setNote(question.code, note)}
               media={form.media}
+              onPickRecord={form.fillFromDirectory}
+              canEditDirectory={form.canEditDirectory}
             />
           ))}
         </ScrollView>

@@ -10,6 +10,7 @@
  * Node's own SQLite. The SQL is the same, so the tests exercise the real queries.
  */
 import { DemoData, DemoPersonKey } from '../demo/demo-data';
+import { cleanRecord, DirectoryKind, DirectoryRecord, FIELDS } from '../directory/rules';
 import { catalog } from '../inspection/catalog';
 import { finalAnswers, hasChanges, initialAnswers, summarize } from '../inspection/form';
 import { AnswerSet, Inspection, InspectionRow, InspectionStatus } from '../inspection/model';
@@ -119,7 +120,20 @@ const MIGRATIONS = [
 
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `,
+  // 2 · F3d: whether the server has a directory record, as for inspections.
+  `
+  ALTER TABLE drivers  ADD COLUMN synced_updated_at TEXT;
+  ALTER TABLE carriers ADD COLUMN synced_updated_at TEXT;
+  ALTER TABLE vehicles ADD COLUMN synced_updated_at TEXT;
+  `,
 ];
+
+/** The column of each directory field (the fields are named as in directory/rules.ts). */
+const COLUMNS: Record<DirectoryKind, Record<string, string>> = {
+  drivers: { name: 'name', idNumber: 'id_number', phone: 'phone' },
+  carriers: { name: 'name', contactName: 'contact_name' },
+  vehicles: { plate: 'plate', description: 'description' },
+};
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -302,13 +316,13 @@ export function localStore(db: Db) {
         await clearAll();
         await db.runAsync('INSERT INTO meta (key, value) VALUES (?, ?)', ['mode', 'demo']);
         for (const c of data.carriers) {
-          await db.runAsync('INSERT INTO carriers VALUES (?, ?, ?, ?, NULL)', [c.id, c.name, c.contactName, now]);
+          await db.runAsync('INSERT INTO carriers (id, name, contact_name, updated_at) VALUES (?, ?, ?, ?)', [c.id, c.name, c.contactName, now]);
         }
         for (const d of data.drivers) {
-          await db.runAsync('INSERT INTO drivers VALUES (?, ?, ?, ?, ?, NULL)', [d.id, d.name, d.idNumber, d.phone, now]);
+          await db.runAsync('INSERT INTO drivers (id, name, id_number, phone, updated_at) VALUES (?, ?, ?, ?, ?)', [d.id, d.name, d.idNumber, d.phone, now]);
         }
         for (const v of data.vehicles) {
-          await db.runAsync('INSERT INTO vehicles VALUES (?, ?, ?, ?, NULL)', [v.id, v.plate, v.description, now]);
+          await db.runAsync('INSERT INTO vehicles (id, plate, description, updated_at) VALUES (?, ?, ?, ?)', [v.id, v.plate, v.description, now]);
         }
         for (const inspection of visible) {
           await db.runAsync(SAVE_INSPECTION, inspectionValues({ ...inspection, createdBy: `demo-${inspection.owner}` }, null));
@@ -444,6 +458,64 @@ export function localStore(db: Db) {
         }
       });
       return localUri;
+    },
+
+    // ---------------------------------------------------------------- directory
+
+    /** The records of one kind that are not deleted, as flat field sets. */
+    async listDirectory(kind: DirectoryKind): Promise<DirectoryRecord[]> {
+      const columns = COLUMNS[kind];
+      const rows = await db.getAllAsync<Record<string, string | null>>(`SELECT * FROM ${kind} WHERE deleted_at IS NULL`, []);
+      return rows.map((row) => {
+        const record: DirectoryRecord = { id: row.id as string };
+        for (const [key, column] of Object.entries(columns)) record[key] = row[column] ?? '';
+        return record;
+      });
+    },
+
+    /** Adds or edits a record (cleaned first) and queues it. The caller checks recordProblems. */
+    async saveDirectoryRecord(kind: DirectoryKind, record: DirectoryRecord, now: string) {
+      const clean = cleanRecord(kind, record);
+      const keys = FIELDS[kind].map((spec) => spec.key);
+      const columns = keys.map((key) => COLUMNS[kind][key]);
+      const values = keys.map((key) => (clean[key] === '' ? null : clean[key]));
+      const live = (await getMode()) !== 'demo';
+      await db.withTransactionAsync(async () => {
+        const row = await db.getFirstAsync<{ synced_updated_at: string | null }>(`SELECT synced_updated_at FROM ${kind} WHERE id = ?`, [clean.id]);
+        if (row) {
+          await db.runAsync(`UPDATE ${kind} SET ${columns.map((c) => `${c} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, [...values, now, clean.id]);
+        } else {
+          await db.runAsync(
+            `INSERT INTO ${kind} (id, ${columns.join(', ')}, updated_at) VALUES (?, ${columns.map(() => '?').join(', ')}, ?)`,
+            [clean.id, ...values, now],
+          );
+        }
+        if (live) {
+          await queue({ entity: 'directory', entityId: clean.id, action: 'upsert', existsOnServer: row?.synced_updated_at != null }, now);
+        }
+      });
+      return clean;
+    },
+
+    /**
+     * Deletes a record. One the server has is only marked (deleted_at), so other phones
+     * learn it is gone; one it never saw simply disappears with its note (S3).
+     */
+    async deleteDirectoryRecord(kind: DirectoryKind, id: string, now: string) {
+      const live = (await getMode()) !== 'demo';
+      await db.withTransactionAsync(async () => {
+        const row = await db.getFirstAsync<{ synced_updated_at: string | null }>(`SELECT synced_updated_at FROM ${kind} WHERE id = ?`, [id]);
+        if (!row) return;
+        const known = row.synced_updated_at !== null;
+        if (known || !live) {
+          await db.runAsync(`UPDATE ${kind} SET deleted_at = ?, updated_at = ? WHERE id = ?`, [now, now, id]);
+        } else {
+          await db.runAsync(`DELETE FROM ${kind} WHERE id = ?`, [id]);
+        }
+        if (live) {
+          await queue({ entity: 'directory', entityId: id, action: known ? 'upsert' : 'delete', existsOnServer: known }, now);
+        }
+      });
     },
 
     /** The notes waiting to be sent (the sender and the sync badge use them). */
