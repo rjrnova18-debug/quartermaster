@@ -47,16 +47,33 @@ Requirements: Node.js 24 and the **Expo Go** app on your phone.
 
 ```bash
 npm install
-cp .env.example .env     # Supabase keys; not needed yet
 npm start                # scan the QR code with Expo Go
 ```
+
+To run the backend on your own free Supabase project:
+
+```bash
+cp .env.example .env                  # your project's URL and keys (never commit .env)
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push --remote         # applies supabase/migrations
+npm run seed                          # loads the invented demo data
+npm run test:db                       # access tests against that project
+```
+
+In the Supabase dashboard, switch off "Allow new users to sign up": accounts are created
+by invitation only.
 
 | Command | What it does |
 |---|---|
 | `npm start` | Starts the development server |
-| `npm test` | Runs the unit tests of the domain rules |
+| `npm test` | Unit tests of the domain rules and the demo data (run by CI) |
 | `npm run typecheck` | Type-checks the whole project |
 | `npm run lint` | Lints the code |
+| `npm run test:db` | Access tests against a real Supabase project: they sign in as temporary users and try what each role must not do |
+| `npm run seed` | Loads the demo data; running it again replaces it |
+| `npm run gen:catalog` | Writes the catalog migration from `catalog/questions.json` |
+| `npm run gen:demo-images` | Redraws the placeholder photos and signatures (Python 3) |
 
 ## Project structure
 
@@ -64,10 +81,15 @@ npm start                # scan the QR code with Expo Go
 quartermaster/
 ├── src/
 │   ├── app/            # screens (Expo Router: one file = one screen)
-│   └── inspection/     # inspection rules: pure TypeScript, no React Native, no Supabase
+│   ├── inspection/     # inspection rules: pure TypeScript, no React Native, no Supabase
+│   └── demo/           # the invented demo data, used by the seed and the demo mode
 ├── catalog/            # questions.json: the inspection form as data
 ├── tests/              # one test file per domain module, one describe per rule
+├── tests-db/           # access tests against a real Supabase project (not in CI)
 ├── supabase/           # database configuration and migrations
+├── scripts/            # catalog migration generator and demo seed
+├── tools/              # pixel-art generators (sprites and demo images)
+├── assets/demo/        # placeholder photos and signatures
 └── .github/workflows/  # CI
 ```
 
@@ -88,7 +110,7 @@ and returns a new value. That is why the rules are tested without a phone or a s
 
 - [x] **F0 · Design** — architecture, open questions, pixel-art mock-up
 - [x] **F1 · Setup** — Expo app, domain package with its 102 tests, CI
-- [ ] **F2 · Backend** — schema, row-level security, demo seed
+- [x] **F2 · Backend** — schema, row-level security, write functions, storage rules, access tests, demo seed
 - [ ] **F3 · Frontend** — pixel-art kit, form, photos and signatures, directory, history and PDF, offline sync
 - [ ] **F4 · Security** — threat model, adversarial access tests, dependency and secret scanning
 - [ ] **F5 · Polish and release** — accessibility, Android APK, screenshots (v1.0)

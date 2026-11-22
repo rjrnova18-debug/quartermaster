@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:db": "jest -c jest.db.config.js --runInBand",
-    "gen:catalog": "node scripts/gen-catalog-sql.js"
+    "gen:catalog": "node scripts/gen-catalog-sql.js",
+    "seed": "tsx scripts/seed.ts",
+    "gen:demo-images": "python tools/demo_images.py"
   },
   "jest": {
     "preset": "jest-expo",
@@ -55,6 +57,7 @@
     "jest": "~30.5.2",
     "jest-expo": "~58.0.15",
     "supabase": "^3.2.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   }
 }
