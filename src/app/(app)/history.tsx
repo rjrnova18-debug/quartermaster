@@ -6,7 +6,8 @@ import { CardAction, InspectionCard } from '@/home/InspectionCard';
 import { useInspections } from '@/home/useInspections';
 import { localDate } from '@/i18n';
 import { catalog } from '@/inspection/catalog';
-import { buildReport, filterHistory, HistoryFilter, shareText } from '@/inspection/review';
+import { buildReport, filterHistory, HistoryFilter, reportState, shareText } from '@/inspection/review';
+import { openReport, REPORT_ACTION } from '@/report/generate';
 import { useSession, useT } from '@/session';
 import { PixelButton, Screen, TextButton, TextField, Txt } from '@/ui/controls';
 import { colors, space } from '@/ui/theme';
@@ -20,6 +21,8 @@ export default function HistoryScreen() {
   const list = useInspections();
   const [filter, setFilter] = useState<HistoryFilter>('all');
   const [search, setSearch] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const shown = filterHistory(list.rows, filter, search, localDate());
   const byId = new Map(list.rows.map((row) => [row.id, row]));
@@ -28,6 +31,20 @@ export default function HistoryScreen() {
   async function share(id: string) {
     const inspection = await (await getLocal()).getInspection(id);
     if (inspection) await Share.share({ message: shareText(buildReport(catalog, inspection, locale)) });
+  }
+
+  async function report(id: string) {
+    const row = byId.get(id)!;
+    setBusy(id);
+    setFailed(null);
+    try {
+      await openReport(id, reportState(row), locale, tr);
+    } catch {
+      setFailed(id);
+    } finally {
+      setBusy(null);
+      list.reload();
+    }
   }
 
   return (
@@ -57,6 +74,7 @@ export default function HistoryScreen() {
 
       {shown.map(({ id }) => {
         const row = byId.get(id)!;
+        const reportAction = REPORT_ACTION[reportState(row)];
         return (
           <InspectionCard
             key={id}
@@ -64,7 +82,11 @@ export default function HistoryScreen() {
             badge={list.demo ? null : list.badgeOf(id)}
             actions={
               <>
+                {reportAction ? (
+                  <CardAction label={busy === id ? tr('report.busy') : tr(reportAction)} onPress={() => (busy ? undefined : report(id))} />
+                ) : null}
                 <CardAction label={tr('history.share')} onPress={() => share(id)} />
+                {failed === id ? <Txt variant="small" color={colors.error}>{tr('report.failed')}</Txt> : null}
                 {list.canDelete(row) ? <CardAction label={tr('common.delete')} onPress={() => list.confirmDelete(row)} /> : null}
               </>
             }

@@ -6,11 +6,13 @@
  *
  * The database keeps only the path. Signing out or leaving the demo deletes all of it.
  */
+import { Asset } from 'expo-asset';
 import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { ImageSourcePropType } from 'react-native';
 
 import { DEMO_IMAGES } from '@/demo/demo-images';
+import { toBase64 } from '@/report/reportHtml';
 
 /** Photos are stored with their longest side at most this many pixels. */
 export const LONGEST_SIDE = 1600;
@@ -67,6 +69,26 @@ export function savedSignatureUri(): string {
 export function deleteSavedSignature() {
   const file = savedSignature();
   if (file.exists) file.delete();
+}
+
+/** Moves a freshly printed PDF into the inspection's folder (replacing the old one). */
+export function storeReport(printedUri: string, inspectionId: string, fileName: string): string {
+  const target = new File(folder('attachments', inspectionId), fileName);
+  if (target.exists) target.delete();
+  new File(printedUri).move(target);
+  return target.uri;
+}
+
+/** An image as a data URI for the report page; bundled demo images are read from the app. */
+export async function readAsDataUri(uri: string): Promise<string> {
+  let fileUri = uri;
+  if (uri.startsWith('demo:')) {
+    const asset = Asset.fromModule(DEMO_IMAGES[uri.slice('demo:'.length)] as number);
+    await asset.downloadAsync();
+    fileUri = asset.localUri ?? asset.uri;
+  }
+  const bytes = await new File(fileUri).bytes();
+  return `data:${fileUri.endsWith('.png') ? 'image/png' : 'image/jpeg'};base64,${toBase64(bytes)}`;
 }
 
 /** Deletes one stored file. Bundled demo images are not files and are left alone. */

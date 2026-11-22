@@ -495,6 +495,31 @@ export function localStore(db: Db) {
       return files;
     },
 
+    /**
+     * Registers a new report file (REPORT.md §1). Marks report_generated_at without
+     * touching updated_at, so the report reads as current until the next change (R7).
+     * The server replaces the previous report by itself, so older report rows and their
+     * unsent notes are simply dropped.
+     */
+    async saveReport(inspectionId: string, attachmentId: string, localUri: string, now: string) {
+      const live = (await getMode()) !== 'demo';
+      await db.withTransactionAsync(async () => {
+        const old = await db.getAllAsync<{ id: string }>("SELECT id FROM attachments WHERE inspection_id = ? AND kind = 'report'", [inspectionId]);
+        for (const { id } of old) {
+          await db.runAsync("DELETE FROM outbox WHERE entity = 'attachment' AND entity_id = ?", [id]);
+        }
+        await db.runAsync("DELETE FROM attachments WHERE inspection_id = ? AND kind = 'report'", [inspectionId]);
+        await db.runAsync(
+          "INSERT INTO attachments (id, inspection_id, kind, question_code, local_uri, uploaded, created_at) VALUES (?, ?, 'report', NULL, ?, 0, ?)",
+          [attachmentId, inspectionId, localUri, now],
+        );
+        await db.runAsync('UPDATE inspections SET report_generated_at = ? WHERE id = ?', [now, inspectionId]);
+        if (live) {
+          await queue({ entity: 'attachment', entityId: attachmentId, parentId: inspectionId, action: 'upsert', existsOnServer: false }, now);
+        }
+      });
+    },
+
     // ---------------------------------------------------------------- directory
 
     /** The records of one kind that are not deleted, as flat field sets. */

@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { Db, localStore, SCHEMA_VERSION } from '../src/data/local';
 import { buildDemoData } from '../src/demo/demo-data';
+import { reportState } from '../src/inspection/review';
 import { AnswerSet } from '../src/inspection/model';
 
 type Params = (string | number | null)[];
@@ -157,6 +158,23 @@ describe('attachments', () => {
     expect(await store.outbox()).toEqual(
       expect.arrayContaining([expect.objectContaining({ entity: 'attachment', entityId: 'photo-1', action: 'delete' })]),
     );
+  });
+});
+
+describe('report', () => {
+  test('a new report is current (R7) and replaces the previous one', async () => {
+    const { store } = await freshStore();
+    await store.startLive();
+    await newDraft(store);
+    await store.saveInspection('insp-1', { answers: { TRIP_DATE: { value: TODAY } }, currentStep: 7, status: 'completed' }, LATER);
+    await store.saveReport('insp-1', 'r1', 'file:///r1.pdf', '2026-03-10T15:10:00.000Z');
+    await store.saveReport('insp-1', 'r2', 'file:///r2.pdf', '2026-03-10T15:20:00.000Z');
+
+    const [row] = await store.listInspections();
+    expect(row.updatedAt).toBe(LATER);
+    expect(reportState(row)).toBe('current');
+    expect((await store.listAttachments('insp-1')).map((a) => [a.id, a.kind])).toEqual([['r2', 'report']]);
+    expect((await store.outbox()).filter((op) => op.entity === 'attachment').map((op) => op.entityId)).toEqual(['r2']);
   });
 });
 

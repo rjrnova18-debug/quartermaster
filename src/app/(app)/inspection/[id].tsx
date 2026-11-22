@@ -10,6 +10,7 @@ import { catalog } from '@/inspection/catalog';
 import { Problem, progress, visibleQuestions } from '@/inspection/form';
 import { Locale } from '@/inspection/model';
 import { displayCode } from '@/inspection/review';
+import { openReport } from '@/report/generate';
 import { useSession, useT } from '@/session';
 import { Frame } from '@/ui/Frame';
 import { Notice, PixelButton, Sprite, TextButton, Txt } from '@/ui/controls';
@@ -178,7 +179,11 @@ function Overlay({ form, tr }: { form: Form; tr: Tr }) {
                 {tr('form.cleared')}
               </Txt>
               <Txt style={styles.center}>{tr('form.clearedBody', { code: displayCode(form.record.id) })}</Txt>
-              <PixelButton label={tr('form.backHome')} onPress={() => router.back()} />
+              <PixelButton
+                label={tr('report.generate')}
+                onPress={() => void openReport(form.record!.id, 'missing', locale, tr).catch(() => undefined)}
+              />
+              <PixelButton variant="secondary" label={tr('form.backHome')} onPress={() => router.back()} />
             </>
           ) : null}
         </ScrollView>

@@ -44,7 +44,9 @@
           "cameraPermission": "Quartermaster uses the camera to photograph the unit during an inspection.",
           "photosPermission": "Quartermaster lets you attach a photo you already took to an inspection."
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
